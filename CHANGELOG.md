@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-10-05
+
+### Added
+
+- opt out of pack hash, require ModpackLib 4.2.1 (de9b5ad)
+
 ## [4.0.0] - 2026-06-15
 
 ### Performance
