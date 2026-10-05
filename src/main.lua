@@ -28,6 +28,7 @@ local function init()
         id = MODULE_ID,
         name = "LiveSplit",
         tooltip = "LiveSplit-style timer and recording tools for speedruns.",
+        hash = false,
     })
     if not module then
         return
