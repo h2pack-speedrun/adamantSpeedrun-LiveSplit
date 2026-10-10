@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [5.2.2] - 2026-10-10
+
+### Fixed
+
+- pass timer block arguments through to the game (8ba346a)
+
 ## [5.2.1] - 2026-10-10
 
 ### Added
