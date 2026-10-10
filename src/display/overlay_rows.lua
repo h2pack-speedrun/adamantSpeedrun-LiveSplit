@@ -1,6 +1,6 @@
+local deps = ...
+local VALUE_FONT = deps.fonts.numeric
 local OVERLAY_REGION = "middleRightStack"
-local LABEL_FONT = "P22UndergroundSCMedium"
-local VALUE_FONT = "NumericP22UndergroundSCMedium"
 local TIMER_TABLE_LABEL_WIDTH = 112
 local TIMER_TABLE_VALUE_WIDTH = 78
 
@@ -28,9 +28,6 @@ function timerOverlay.buildSummaryColumns()
             key = "label",
             minWidth = 40,
             justify = "Left",
-            textArgs = {
-                Font = LABEL_FONT,
-            },
         },
         {
             key = "time",
@@ -49,9 +46,6 @@ function timerOverlay.buildTimerTableColumns(modeVisible)
             key = "label",
             minWidth = TIMER_TABLE_LABEL_WIDTH,
             justify = "Left",
-            textArgs = {
-                Font = LABEL_FONT,
-            },
         },
         buildModeColumn("igt", modeVisible),
         buildModeColumn("rta", modeVisible),

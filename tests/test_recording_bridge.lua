@@ -32,6 +32,7 @@ local timerInit = withImport(function()
 end)
 local timerInitDisplay = withImport(function()
     return assert(loadfile("src/display/display.lua"))({
+        fonts = support.fonts,
         timer = timerInit,
     })
 end)

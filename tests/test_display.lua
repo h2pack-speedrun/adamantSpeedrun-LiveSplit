@@ -9,6 +9,7 @@ local refreshOwnedCount = 0
 
 withImport(function()
     local display = assert(loadfile("src/display/display.lua"))({
+        fonts = support.fonts,
         timer = {
             batch = {
                 hasSession = function()

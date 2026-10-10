@@ -1,7 +1,9 @@
 local deps = ... or {}
 local timer = deps.timer
 local data = deps.data or import("data.lua")
-local overlay = deps.overlay or import('display/overlay_rows.lua')
+local overlay = deps.overlay or import('display/overlay_rows.lua', nil, {
+    fonts = deps.fonts,
+})
 local overlayEvents = deps.overlayEvents
 local timeFormat = deps.timeFormat or import('display/time_format.lua')
 local formatCentiseconds = deps.formatCentiseconds or timeFormat.formatCentiseconds

@@ -43,6 +43,7 @@ local function init()
     local display = import("display/display.lua", nil, {
         timer = timer,
         overlayEvents = controller.overlayEvents,
+        fonts = module.overlays.fonts,
     })
     local sharedSnapshot = import("shared_snapshot.lua", nil, {
         timer = timer,

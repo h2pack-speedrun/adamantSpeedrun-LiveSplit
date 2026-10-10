@@ -85,8 +85,12 @@ support.formatCache = assert(loadfile("src/display/format_cache.lua"))({
 
 support.data = dofile("src/data.lua")
 
+support.fonts = { numeric = "NumericP22UndergroundSCMedium" }
+
 support.overlay = support.withImport(function()
-    return assert(loadfile("src/display/overlay_rows.lua"))()
+    return assert(loadfile("src/display/overlay_rows.lua"))({
+        fonts = support.fonts,
+    })
 end)
 
 return support
