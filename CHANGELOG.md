@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [5.2.1] - 2026-10-10
+
+### Added
+
+- use Lib overlay font constants (
+0eefd9)
+
 ## [5.0.0] - 2026-10-05
 
 ### Added
