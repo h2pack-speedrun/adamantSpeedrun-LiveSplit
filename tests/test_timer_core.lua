@@ -155,6 +155,13 @@ assertEqual(hookEvents[3], "display")
 hookCallbacks.AddTimerBlock(hookHost, hookRuntime, function()
     return true
 end, CurrentRun, "MapLoad")
+local forwardedTimerBlockArgs = nil
+hookCallbacks.AddTimerBlock(hookHost, hookRuntime, function(_, _, args)
+    forwardedTimerBlockArgs = args
+    return true
+end, CurrentRun, "AthenaPresence", { MapState = true })
+assert(forwardedTimerBlockArgs ~= nil and forwardedTimerBlockArgs.MapState == true,
+    "expected AddTimerBlock args to reach the native function")
 setTime(3)
 hookCallbacks.RemoveTimerBlock(hookHost, hookRuntime, function()
     return true

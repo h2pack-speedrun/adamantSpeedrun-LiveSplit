@@ -62,16 +62,18 @@ function hooksAdapter.installHooks(hooks, callbacks)
         return value
     end)
 
-    hooks.wrap("AddTimerBlock", function(host, runtime, baseFunc, currRun, timerBlockName)
-        local value = baseFunc(currRun, timerBlockName)
+    hooks.wrap("AddTimerBlock", function(host, runtime, baseFunc, currRun, timerBlockName, ...)
+        -- Pass native arguments through; AddTimerBlock's args select the MapState scope.
+        local value = baseFunc(currRun, timerBlockName, ...)
         if isEnabled(callbacks, host) and timerBlockName == "MapLoad" and singleRun.processLoadEvent(true) then
             callbacks.onLoadEvent(runtime, true)
         end
         return value
     end)
 
-    hooks.wrap("RemoveTimerBlock", function(host, runtime, baseFunc, currRun, timerBlockName)
-        local value = baseFunc(currRun, timerBlockName)
+    hooks.wrap("RemoveTimerBlock", function(host, runtime, baseFunc, currRun, timerBlockName, ...)
+        -- Pass native arguments through; AddTimerBlock's args select the MapState scope.
+        local value = baseFunc(currRun, timerBlockName, ...)
         if isEnabled(callbacks, host) and timerBlockName == "MapLoad" and singleRun.processLoadEvent(false) then
             callbacks.onLoadEvent(runtime, false)
         end
