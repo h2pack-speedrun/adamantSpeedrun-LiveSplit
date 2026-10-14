@@ -56,8 +56,12 @@ function runLoop.installHooks(hooks)
             recording.onRunFinalized(runtime, activeTimer(), getCurrentRun(), snapshot())
         end,
         onDisplayChanged = function(runtime)
+            recording.onPlayResumed(runtime)
             updateLiveRecordingRows(activeTimer(), getCurrentRun(), snapshot())
             onChanged(runtime)
+        end,
+        onCheckpoint = function(runtime)
+            recording.checkpoint(runtime)
         end,
     })
 end

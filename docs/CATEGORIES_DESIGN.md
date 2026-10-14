@@ -1,6 +1,6 @@
 # Category Sessions Design
 
-Status: agreed design, not yet implemented. Implementation follows the phases at the end.
+Status: phases 1 and 2 implemented; phases 3 and 4 pending. See the phases at the end.
 
 ## Goal
 
@@ -103,16 +103,39 @@ later improvement.
 
 ## Persistence
 
-Saved through Lib status storage with `persist = true`:
+Implemented in phase 2 for multi-run sessions. Single Run does not persist: it has no history
+worth resuming.
 
-- the session settings (preset name plus effective rules and display settings);
-- the attempt log: key values, label, status, end times per attempt;
-- biome splits only for attempts in `completedRun = splits` categories;
-- session elapsed RTA, summed IGT and load time.
+**Storage.** Persisted module status (`data.buildStatus`): `SessionState` (`open`, `completed`,
+`failed`, or empty), `SessionRuns`, the session clocks `SessionRtaCs`, `SessionLoadCs` and
+`SessionIgtCs`, and the `SessionAttempts` table (status, route, weapon, aspect, run ordinal and
+end times per attempt, capped at `data.maxSessionAttempts`). `timer/session_store.lua` maps a
+session record to these fields. Every persisted status write rewrites the module config file
+(about 40 KB at 60 attempts), so writes stay incremental: one table row per attempt change, and
+only the clocks at checkpoints.
 
-Saved when a session starts, when an attempt ends, and when a session is cleared. Never per tick.
-Phase 2 starts by confirming that status table storage persists and scales to a long All Aspects
-session (dozens of attempts).
+**When it saves.** When an attempt starts and when it ends, and at every game checkpoint: the
+game checkpoints a run at room transitions through `RequestSave`, and LiveSplit wraps it to save
+the session clocks alongside, so the saved clocks match the point the game resumes from.
+
+**Run identity.** Each attempt stores its run ordinal: `GameState.CompletedRunsCache` (finished
+runs in the save) when the run starts.
+
+**Resume.** With `ResumeAfterRestart` on (default), arming batch recording from a cold start (game
+launch, module re-enable) restores the saved session suspended: clocks frozen at the saved values.
+The first in-play event (run start, room entrance or game checkpoint) resumes it:
+
+- if the saved active attempt's run is still the current run, the attempt continues;
+- if that run finished while LiveSplit was not running, the attempt is settled from
+  `GameState.RunHistory` (clear or death, and its IGT);
+- RTA and LrT continue from the saved values, so time while the game was closed is not counted.
+
+A finished session (completed or failed) is restored for display only, with recording disarmed.
+Start, Start New, Clear, Stop and leaving multi-run mode clear the saved session. With
+`ResumeAfterRestart` off, a saved session is discarded when recording arms.
+
+`onDeath` (what a death does to the session) and `ResumeAfterRestart` (what a game exit does)
+are independent.
 
 ## Overlay
 
@@ -147,10 +170,10 @@ are added as new fields, so existing readers keep working.
 
 ## Phases
 
-1. **Engine.** Session, attempt log, key interface, rules and `onDeath`. Port the current single
+1. **Engine.** Done: session, attempt log, key interface, rules and `onDeath`. Port the current single
    and multi modes onto it with no visible change. Tests cover rules and status transitions.
-2. **Persistence.** Save and resume sessions with `resumeAfterRestart`; RTA resumes without
-   downtime.
+2. **Persistence.** Done: save and resume multi-run sessions with `ResumeAfterRestart`; RTA
+   resumes without downtime.
 3. **Overlay.** Pinned and paged layout, follow-newest, page hotkeys, ImGui history view.
 4. **Categories.** Weapon and aspect key resolvers, name tables, the five presets, and the simple
    and advanced UI.

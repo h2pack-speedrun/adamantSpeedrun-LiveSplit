@@ -5,6 +5,10 @@ local normalizeRecordingMode = deps.normalizeRecordingMode
 local newSession = deps.newSession
 local resolveKeys = deps.resolveKeys
 local isRunSuccess = deps.isRunSuccess
+local restoreSession = deps.restoreSession
+local currentRunOrdinal = deps.currentRunOrdinal
+local findRunResult = deps.findRunResult
+local store = deps.store
 
 local recording = {}
 local currentMode = nil
@@ -84,6 +88,58 @@ local function startBatchRecording(targetRuns)
     batch.start(targetRuns)
 end
 
+-- Multi-run session persistence ----------------------------------------------------------------
+
+local function clearSavedSession(runtime)
+    if runtime.status.read("SessionState") ~= "" then
+        store.clear(runtime.status)
+    end
+end
+
+local function saveSessionAttempt(runtime, attempt)
+    local session = batch.getSession()
+    if session == nil or attempt == nil then
+        return
+    end
+    local record = session:toRecord()
+    store.saveAttempt(runtime.status, record, attempt.index)
+    store.saveTotals(runtime.status, record, batch.targetRuns())
+end
+
+--- Arms batch recording, resuming the saved session when allowed and one exists.
+local function armBatch(runtime, targetRuns, allowResume)
+    if allowResume and runtime.data.read("ResumeAfterRestart") == true then
+        local record, savedRuns = store.load(runtime.status)
+        if record ~= nil then
+            batch.restore(restoreSession(batch.settingsFor(savedRuns), record), savedRuns)
+            return
+        end
+    end
+    startBatchRecording(targetRuns)
+    clearSavedSession(runtime)
+end
+
+--- Resumes a restored session once play is underway again. An attempt whose run finished while
+--- the game was closed is settled from run history first.
+local function resumeSession(runtime)
+    local session = batch.getSession()
+    if session == nil or not session:isSuspended() then
+        return
+    end
+    local active = session:getActiveAttempt()
+    local ordinal = currentRunOrdinal()
+    if active ~= nil and active.runOrdinal ~= nil and ordinal ~= nil and ordinal > active.runOrdinal then
+        local result = findRunResult(active.runOrdinal)
+        local finished = batch.finishRestoredAttempt(result ~= nil and result.cleared,
+            result and result.igtSeconds or 0)
+        saveSessionAttempt(runtime, finished)
+        if not batch.isActive() then
+            disarm(runtime)
+        end
+    end
+    session:resume()
+end
+
 local function stopBatchRecording()
     batch.stop()
 end
@@ -116,11 +172,11 @@ function recording.syncSettings(runtime)
     if nextMode == "multi" then
         if previousMode ~= "multi" then
             clearSingleRecording(true)
-            startBatchRecording(nextTargetRuns)
+            armBatch(runtime, nextTargetRuns, false)
             return
         end
         if not batch.isReady() then
-            startBatchRecording(nextTargetRuns)
+            armBatch(runtime, nextTargetRuns, true)
             return
         end
         if batch.targetRuns() ~= nextTargetRuns and not batch.hasProgress() then
@@ -131,6 +187,7 @@ function recording.syncSettings(runtime)
 
     if previousMode == "multi" then
         clearBatchRecording(nextTargetRuns)
+        clearSavedSession(runtime)
     end
 
     if not splits.isStarted() then
@@ -149,6 +206,7 @@ function recording.start(runtime)
     local targetRuns = readTargetRuns(runtime)
     setRecordingReady(runtime, true)
     currentMode = readRecordingMode(runtime)
+    clearSavedSession(runtime)
     if recording.isMultiRunMode() then
         clearSingleRecording(true)
         startBatchRecording(targetRuns)
@@ -160,12 +218,14 @@ end
 
 function recording.clear(runtime)
     local targetRuns = readTargetRuns(runtime)
+    clearSavedSession(runtime)
     clearBatchRecording(targetRuns)
     clearSingleRecording(isRecordingReady(runtime))
 end
 
 function recording.stop(runtime)
     setRecordingReady(runtime, false)
+    clearSavedSession(runtime)
     stopBatchRecording()
     clearSingleRecording(false)
 end
@@ -182,7 +242,29 @@ function recording.onRunStarted(runtime, run)
         beginSingleAttempt(run)
     end
     if recording.isMultiRunMode() then
-        batch.startRun()
+        resumeSession(runtime)
+        if batch.startRun(resolveKeys(run), currentRunOrdinal()) then
+            saveSessionAttempt(runtime, batch.getSession():getActiveAttempt())
+        end
+    end
+end
+
+--- Play is underway (a room was entered); resumes a session restored after a restart.
+function recording.onPlayResumed(runtime)
+    if recording.isMultiRunMode() then
+        resumeSession(runtime)
+    end
+end
+
+--- The game wrote a checkpoint; save the session clocks with it.
+function recording.checkpoint(runtime)
+    if not recording.isMultiRunMode() then
+        return
+    end
+    resumeSession(runtime)
+    local session = batch.getSession()
+    if session ~= nil and session:isOpen() then
+        store.saveClocks(runtime.status, session:toRecord())
     end
 end
 
@@ -201,7 +283,9 @@ end
 
 function recording.onRunFinalized(runtime, timer, run, snapshot)
     if recording.isMultiRunMode() then
-        batch.finalizeRun(timer, run)
+        if batch.finalizeRun(timer, run) then
+            saveSessionAttempt(runtime, batch.getSession():getLastFinishedAttempt())
+        end
         -- A completed or failed batch disarms recording so its result stays until Start New.
         if not batch.isActive() then
             disarm(runtime)
@@ -218,13 +302,19 @@ function recording.initialize(runtime)
     if currentMode == "multi" then
         clearSingleRecording(recordingReady)
         if recordingReady then
-            startBatchRecording(readTargetRuns(runtime))
+            armBatch(runtime, readTargetRuns(runtime), true)
         else
             stopBatchRecording()
+            -- A finished batch's result is shown again after a restart.
+            local record, savedRuns = store.load(runtime.status)
+            if record ~= nil and record.state ~= "open" and runtime.data.read("ResumeAfterRestart") == true then
+                batch.restore(restoreSession(batch.settingsFor(savedRuns), record), savedRuns)
+            end
         end
     else
         clearBatchRecording(readTargetRuns(runtime))
         clearSingleRecording(recordingReady)
+        clearSavedSession(runtime)
     end
 end
 

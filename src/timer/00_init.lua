@@ -48,8 +48,12 @@ recording = import('timer/recording.lua', nil, {
     batch = batch,
     normalizeRecordingMode = import('data.lua').normalizeRecordingMode,
     newSession = newSession,
+    restoreSession = Session.restore,
     resolveKeys = keys.resolve,
     isRunSuccess = game.isRunSuccess,
+    currentRunOrdinal = game.currentRunOrdinal,
+    findRunResult = game.findRunResult,
+    store = import('timer/session_store.lua'),
 })
 runLoop = import('timer/run_loop.lua', nil, {
     singleRun = singleRun,

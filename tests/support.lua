@@ -52,6 +52,48 @@ function support.newRuntimeState(backing)
             backing[alias] = nil
             return hadValue
         end,
+        -- Table storage: an in-memory stand-in for a Lib table handle (colon-call methods).
+        get = function(alias)
+            backing[alias] = backing[alias] or {}
+            local rows = backing[alias]
+            local function copy(row)
+                local result = {}
+                for key, value in pairs(row) do
+                    result[key] = value
+                end
+                return result
+            end
+            return {
+                count = function()
+                    return #rows
+                end,
+                append = function(_, row)
+                    rows[#rows + 1] = copy(row)
+                    return true
+                end,
+                insert = function(_, index, row)
+                    table.insert(rows, index, copy(row))
+                    return true
+                end,
+                remove = function(_, index)
+                    table.remove(rows, index)
+                    return true
+                end,
+                clear = function()
+                    for index = #rows, 1, -1 do
+                        rows[index] = nil
+                    end
+                    return true
+                end,
+                snapshots = function()
+                    local result = {}
+                    for index, row in ipairs(rows) do
+                        result[index] = copy(row)
+                    end
+                    return result
+                end,
+            }
+        end,
     }
 end
 
@@ -88,6 +130,29 @@ support.Session = assert(loadfile("src/timer/session.lua"))({
     core = support.core,
 })
 support.newSession = support.Session.new
+support.store = dofile("src/timer/session_store.lua")
+
+--- Recording dependencies shared by tests; game reads default to "no save loaded".
+function support.recordingDeps(overrides)
+    local result = {
+        normalizeRecordingMode = support.data.normalizeRecordingMode,
+        newSession = support.newSession,
+        restoreSession = support.Session.restore,
+        resolveKeys = support.resolveKeys,
+        isRunSuccess = support.isRunSuccess,
+        currentRunOrdinal = function()
+            return nil
+        end,
+        findRunResult = function()
+            return nil
+        end,
+        store = support.store,
+    }
+    for key, value in pairs(overrides or {}) do
+        result[key] = value
+    end
+    return result
+end
 
 function support.isRunSuccess(run)
     return run ~= nil and run.Cleared == true

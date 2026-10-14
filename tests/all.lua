@@ -1,6 +1,7 @@
 local tests = {
     "tests/test_timer_core.lua",
     "tests/test_session.lua",
+    "tests/test_persistence.lua",
     "tests/test_display.lua",
     "tests/test_splits.lua",
     "tests/test_batch.lua",

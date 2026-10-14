@@ -49,6 +49,11 @@ local RECORDING_MODE_OPTS = {
     displayValues = RECORDING_MODE_LABELS,
     optionsPerLine = 2,
 }
+local RESUME_AFTER_RESTART_OPTS = {
+    label = "Resume after restart",
+    tooltip = "Keep the multi-run session across a game exit or crash. "
+        .. "Time while the game is closed is not counted.",
+}
 local BATCH_TARGET_RUNS_OPTS = {
     label = "Runs to record",
     min = data.batchTargetRuns.min,
@@ -153,6 +158,7 @@ end
 local function drawRecordingControls(draw, state, actions, recordingMode, statusKind)
     if recordingMode == "multi" then
         draw.widgets.stepper(state.get("BatchTargetRuns"), BATCH_TARGET_RUNS_OPTS)
+        draw.widgets.checkbox(state.get("ResumeAfterRestart"), RESUME_AFTER_RESTART_OPTS)
     end
 
     drawRecordingActions(draw, actions, statusKind)

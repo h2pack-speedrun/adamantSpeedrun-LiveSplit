@@ -19,9 +19,10 @@ function RtaTimer:new()
     return o
 end
 
-function RtaTimer:start()
-    self.StartingSystemTime = getTime({})
-    self.ElapsedTime = 0
+--- Starts timing, optionally continuing from `elapsedSeconds` already recorded (a resumed session).
+function RtaTimer:start(elapsedSeconds)
+    self.StartingSystemTime = getTime({}) - (elapsedSeconds or 0)
+    self.ElapsedTime = elapsedSeconds or 0
     self.Running = true
 end
 

@@ -86,14 +86,10 @@ local recordingBatch = assert(loadfile("src/timer/batch.lua"))({
         return run and run.Cleared == true
     end,
 })
-local recording = assert(loadfile("src/timer/recording.lua"))({
+local recording = assert(loadfile("src/timer/recording.lua"))(support.recordingDeps({
     splits = recordingSplits,
     batch = recordingBatch,
-    normalizeRecordingMode = support.data.normalizeRecordingMode,
-    newSession = support.newSession,
-    resolveKeys = support.resolveKeys,
-    isRunSuccess = support.isRunSuccess,
-})
+}))
 recording.initialize(recordingRuntime)
 assertEqual(recording.status().kind, "idle")
 recording.start(recordingRuntime)
@@ -220,14 +216,10 @@ local restoredBatch = assert(loadfile("src/timer/batch.lua"))({
         return run and run.Cleared == true
     end,
 })
-local restoredRecording = assert(loadfile("src/timer/recording.lua"))({
+local restoredRecording = assert(loadfile("src/timer/recording.lua"))(support.recordingDeps({
     splits = restoredSplits,
     batch = restoredBatch,
-    normalizeRecordingMode = support.data.normalizeRecordingMode,
-    newSession = support.newSession,
-    resolveKeys = support.resolveKeys,
-    isRunSuccess = support.isRunSuccess,
-})
+}))
 restoredRecording.initialize(restoredRuntime)
 assertEqual(restoredRecording.status().kind, "ready")
 assertEqual(restoredRecording.status().text, "Recording ready for 6 runs")
@@ -274,14 +266,10 @@ local bridgeRuntime = {
     },
     status = newRuntimeState(),
 }
-bridgeRecording = assert(loadfile("src/timer/recording.lua"))({
+bridgeRecording = assert(loadfile("src/timer/recording.lua"))(support.recordingDeps({
     splits = bridgeSplits,
     batch = bridgeBatch,
-    normalizeRecordingMode = support.data.normalizeRecordingMode,
-    newSession = support.newSession,
-    resolveKeys = support.resolveKeys,
-    isRunSuccess = support.isRunSuccess,
-})
+}))
 local runLoop = assert(loadfile("src/timer/run_loop.lua"))({
     singleRun = bridgeSingleRun,
     recording = bridgeRecording,
@@ -377,17 +365,13 @@ local singleSplits = assert(loadfile("src/timer/splits.lua"))({
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = support.isRunSuccess,
 })
-local singleRecording = assert(loadfile("src/timer/recording.lua"))({
+local singleRecording = assert(loadfile("src/timer/recording.lua"))(support.recordingDeps({
     splits = singleSplits,
     batch = assert(loadfile("src/timer/batch.lua"))({
         newSession = support.newSession,
         isRunSuccess = support.isRunSuccess,
     }),
-    normalizeRecordingMode = support.data.normalizeRecordingMode,
-    newSession = support.newSession,
-    resolveKeys = support.resolveKeys,
-    isRunSuccess = support.isRunSuccess,
-})
+}))
 local singleTimer = {
     getInGameTime = function()
         return 5

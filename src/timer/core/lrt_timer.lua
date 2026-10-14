@@ -19,14 +19,15 @@ function LrtTimer:new(args)
     return o
 end
 
-function LrtTimer:init()
+function LrtTimer:init(loadSeconds)
     self.Loading = false
     self.LoadStartSystemTime = nil
-    self.LoadTime = 0
+    self.LoadTime = loadSeconds or 0
 end
 
-function LrtTimer:start()
-    self:init()
+--- Starts timing, optionally continuing from `loadSeconds` of load time already removed.
+function LrtTimer:start(loadSeconds)
+    self:init(loadSeconds)
     self.Running = true
 end
 

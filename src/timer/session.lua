@@ -80,9 +80,10 @@ local function breaksSameRule(self, attemptKeys)
     return attemptKeys[sameKey] ~= self.referenceKeys[sameKey]
 end
 
---- Starts an attempt. A still-unfinished attempt is dropped first, as the previous run was
---- abandoned without being finalized. Returns nil when the session has ended.
-function Session:startAttempt(attemptKeys)
+--- Starts an attempt for the run with game ordinal `runOrdinal`. A still-unfinished attempt is
+--- dropped first, as the previous run was abandoned without being finalized. Returns nil when the
+--- session has ended.
+function Session:startAttempt(attemptKeys, runOrdinal)
     if self.outcome ~= nil then
         return nil
     end
@@ -99,6 +100,7 @@ function Session:startAttempt(attemptKeys)
     local attempt = {
         index = #self.attempts + 1,
         keys = attemptKeys,
+        runOrdinal = runOrdinal,
         status = "active",
         finished = false,
     }
@@ -189,6 +191,102 @@ end
 function Session:igtCs(activeIgtSeconds)
     local activeCs = self.activeAttempt ~= nil and core.toCentiseconds(activeIgtSeconds or 0) or 0
     return core.toCentiseconds(self.igtSeconds) + activeCs
+end
+
+-- Persistence --------------------------------------------------------------------------------
+
+local KEY_NAMES = { "route", "weapon", "aspect" }
+
+--- A restored open session waits, timers frozen, until play resumes after a restart.
+function Session:isSuspended()
+    return self.suspended == true
+end
+
+function Session:resume()
+    if not self.suspended then
+        return
+    end
+    self.suspended = false
+    if self.outcome == nil then
+        self.rta:start(self.rta:getTime())
+        self.lrt:start(self.lrt:getLoadTime())
+    end
+end
+
+--- Plain data describing the session, for saving. Times are centiseconds.
+function Session:toRecord()
+    local attempts = {}
+    for index, attempt in ipairs(self.attempts) do
+        local row = {
+            status = attempt.status,
+            runOrdinal = attempt.runOrdinal,
+            igtCs = attempt.igtCs,
+            sessionIgtCs = attempt.sessionIgtCs,
+            sessionRtaCs = attempt.sessionRtaCs,
+            sessionLrtCs = attempt.sessionLrtCs,
+            countIndex = attempt.countIndex,
+        }
+        for _, keyName in ipairs(KEY_NAMES) do
+            row[keyName] = attempt.keys[keyName]
+        end
+        attempts[index] = row
+    end
+    return {
+        state = self.outcome or (self.started and "open" or "new"),
+        rtaCs = self:rtaCs(),
+        loadCs = core.toCentiseconds(self.lrt:getLoadTime()),
+        igtCs = core.toCentiseconds(self.igtSeconds),
+        attempts = attempts,
+    }
+end
+
+--- Rebuilds a session saved with `toRecord`. An open session comes back suspended.
+---@param settings LiveSplitSessionSettings
+function Session.restore(settings, record)
+    local session = Session.new(settings)
+    session.igtSeconds = (record.igtCs or 0) / 100
+    session.rta.ElapsedTime = (record.rtaCs or 0) / 100
+    session.lrt.LoadTime = (record.loadCs or 0) / 100
+
+    for index, row in ipairs(record.attempts or {}) do
+        local attemptKeys = {}
+        for _, keyName in ipairs(KEY_NAMES) do
+            attemptKeys[keyName] = row[keyName]
+        end
+        local attempt = {
+            index = index,
+            keys = attemptKeys,
+            runOrdinal = row.runOrdinal,
+            status = row.status,
+            finished = row.status ~= "active",
+            igtCs = row.igtCs,
+            sessionIgtCs = row.sessionIgtCs,
+            sessionRtaCs = row.sessionRtaCs,
+            sessionLrtCs = row.sessionLrtCs,
+            countIndex = row.countIndex,
+        }
+        session.attempts[index] = attempt
+        if attempt.status ~= "invalid" and session.referenceKeys == nil then
+            session.referenceKeys = attemptKeys
+        end
+        if attempt.status == "counted" then
+            session.countedTotal = session.countedTotal + 1
+            if settings.distinct ~= "none" and attemptKeys[settings.distinct] ~= nil then
+                session.counted[attemptKeys[settings.distinct]] = true
+            end
+        elseif attempt.status == "active" then
+            session.activeAttempt = attempt
+        end
+    end
+
+    if record.state == "completed" or record.state == "failed" then
+        session.started = true
+        session.outcome = record.state
+    elseif record.state == "open" then
+        session.started = true
+        session.suspended = true
+    end
+    return session
 end
 
 return Session

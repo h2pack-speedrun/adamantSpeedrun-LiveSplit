@@ -92,15 +92,41 @@ function batch.clear(targetRuns)
     state.session = nil
 end
 
-function batch.startRun()
+function batch.startRun(attemptKeys, runOrdinal)
     if not state.ready then
         return false
     end
     if state.session == nil then
         state.session = newSession(batchSettings(state.targetRuns))
     end
-    state.session:startAttempt({})
+    state.session:startAttempt(attemptKeys or {}, runOrdinal)
     return true
+end
+
+--- Finishes the restored session's active attempt with a result read from run history.
+function batch.finishRestoredAttempt(cleared, igtSeconds)
+    local attempt = state.session and state.session:finishAttempt(cleared, igtSeconds) or nil
+    if attempt ~= nil and state.session:getOutcome() ~= nil then
+        state.ready = false
+    end
+    return attempt
+end
+
+--- The current batch session, or nil before the first run.
+function batch.getSession()
+    return state.session
+end
+
+--- Settings for a batch of `targetRuns`, for restoring a saved batch session.
+function batch.settingsFor(targetRuns)
+    return batchSettings(normalizeTargetRuns(targetRuns))
+end
+
+--- Adopts a restored session. An ended session keeps its result visible with recording disarmed.
+function batch.restore(session, targetRuns)
+    state.targetRuns = normalizeTargetRuns(targetRuns)
+    state.session = session
+    state.ready = session:getOutcome() == nil
 end
 
 function batch.processLoadEvent(isLoading)
