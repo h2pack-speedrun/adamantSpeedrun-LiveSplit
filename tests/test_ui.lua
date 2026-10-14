@@ -35,6 +35,7 @@ local uiDraw = {
         separator = function() end,
         checkbox = function() return false end,
         radio = function() return false end,
+        dropdown = function() return false end,
         stepper = function(_, opts)
             uiStepperOpts = opts
             return false
@@ -103,7 +104,7 @@ assertEqual(uiButtons[1], "Stop")
 assertEqual(uiButtons[2], "Clear")
 assertEqual(uiButtons[3], nil)
 
-uiSessionValues.RecordingMode = "multi"
+uiSessionValues.Category = "custom"
 uiStepperOpts = nil
 uiModule.drawQuickContent({
     imgui = uiDraw.imgui,
@@ -156,10 +157,20 @@ local fullDraw = {
         end,
     },
 }
-uiSessionValues.RecordingMode = "multi"
+uiSessionValues.Category = "custom"
 uiModule.drawTab(fullDraw, drawState, uiActions, historyView)
-assertEqual(dropdownLabels[1], "Previous page key")
-assertEqual(dropdownLabels[2], "Next page key")
+local function hasDropdown(label)
+    for _, value in ipairs(dropdownLabels) do
+        if value == label then
+            return true
+        end
+    end
+    return false
+end
+assertEqual(dropdownLabels[1], "Category")
+assert(hasDropdown("Each counted run needs a new"), "expected custom rule dropdowns")
+assert(hasDropdown("Previous page key"), "expected previous page key")
+assert(hasDropdown("Next page key"), "expected next page key")
 assertEqual(childDepth, 0)
 local historyTexts = {}
 for _, entry in ipairs(texts) do
@@ -182,4 +193,4 @@ for _, entry in ipairs(texts) do
     end
 end
 assert(rawequal(cachedLine, firstLine), "expected cached history line")
-uiSessionValues.RecordingMode = "single"
+uiSessionValues.Category = "single"

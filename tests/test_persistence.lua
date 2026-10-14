@@ -78,11 +78,13 @@ local storeRecord = {
     },
 }
 store.saveAttempt(status, storeRecord, 1)
-store.saveTotals(status, storeRecord, 3)
+store.saveTotals(status, storeRecord, support.batchSettings(3))
 storeRecord.attempts[1] = { status = "counted", route = "surface", runOrdinal = 0, igtCs = 50, countIndex = 1 }
 store.saveAttempt(status, storeRecord, 1)
-local loaded, loadedRuns = store.load(status)
-assertEqual(loadedRuns, 3)
+local loaded, loadedRules = store.load(status)
+assertEqual(loadedRules.runs, 3)
+assertEqual(loadedRules.category, "custom")
+assertEqual(loadedRules.onDeath, "reset")
 assertEqual(loaded.state, "open")
 assertEqual(loaded.rtaCs, 100)
 assertEqual(#loaded.attempts, 1)
@@ -114,12 +116,9 @@ local function boot()
         },
         status = support.newRuntimeState(persisted),
     }
-    local batch = assert(loadfile("src/timer/batch.lua"))({
-        newSession = support.newSession,
-        isRunSuccess = support.isRunSuccess,
-    })
+    local batch = assert(loadfile("src/timer/batch.lua"))(support.batchDeps())
     local splits = assert(loadfile("src/timer/splits.lua"))({
-        routeOf = support.routeOf,
+        keys = support.keys,
         toCentiseconds = support.core.toCentiseconds,
         isRunSuccess = support.isRunSuccess,
     })

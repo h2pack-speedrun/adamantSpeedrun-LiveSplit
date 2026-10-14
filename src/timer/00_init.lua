@@ -37,11 +37,14 @@ local newSession = Session.new
 splits = import('timer/splits.lua', nil, {
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = game.isRunSuccess,
-    routeOf = keys.routeOf,
+    keys = keys,
 })
+local categories = import('timer/categories.lua')
 batch = import('timer/batch.lua', nil, {
     newSession = newSession,
     isRunSuccess = game.isRunSuccess,
+    keys = keys,
+    categoryNames = categories.NAMES,
 })
 recording = import('timer/recording.lua', nil, {
     splits = splits,
@@ -54,6 +57,7 @@ recording = import('timer/recording.lua', nil, {
     currentRunOrdinal = game.currentRunOrdinal,
     findRunResult = game.findRunResult,
     store = import('timer/session_store.lua'),
+    categories = categories,
 })
 runLoop = import('timer/run_loop.lua', nil, {
     singleRun = singleRun,
@@ -89,11 +93,16 @@ function timer.currentRun.hasDetails()
 end
 
 function timer.batch.session()
-    return batch.session(singleRun.getActiveTimer())
+    return batch.session(singleRun.getActiveTimer(), game.getCurrentRun())
 end
 
 function timer.batch.history()
     return batch.history()
+end
+
+function timer.batch.keepsSplits()
+    local settings = batch.getSettings()
+    return settings ~= nil and settings.completedRun == "splits"
 end
 
 function timer.batch.hasSession()
@@ -150,7 +159,7 @@ function timer.ensureDisplayLoop()
 end
 
 function timer.updateTick(runtime)
-    runLoop.updateTick()
+    runLoop.updateTick(runtime)
     onChanged(runtime)
 end
 

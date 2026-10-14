@@ -74,18 +74,13 @@ local recordingRuntime = {
     status = newRuntimeState(recordingCache),
 }
 local recordingSplits = assert(loadfile("src/timer/splits.lua"))({
-    routeOf = support.routeOf,
+    keys = support.keys,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function(run)
         return run and run.Cleared == true
     end,
 })
-local recordingBatch = assert(loadfile("src/timer/batch.lua"))({
-    newSession = support.newSession,
-    isRunSuccess = function(run)
-        return run and run.Cleared == true
-    end,
-})
+local recordingBatch = assert(loadfile("src/timer/batch.lua"))(support.batchDeps())
 local recording = assert(loadfile("src/timer/recording.lua"))(support.recordingDeps({
     splits = recordingSplits,
     batch = recordingBatch,
@@ -128,7 +123,7 @@ recording.onRunFinalized(recordingRuntime, {
     Cleared = true,
 })
 assertEqual(recording.status().text, "Recording 1 / 4")
-assertEqual(recordingBatch.session().runs[1].igtCs, 1500)
+assertEqual(recordingBatch.session().groups[1].heading.igtCs, 1500)
 recording.stop(recordingRuntime)
 assertEqual(recordingCache.RecordingReady, false)
 assertEqual(recording.status().kind, "idle")
@@ -157,7 +152,7 @@ assertEqual(recording.status().text, "Recorded 2 / 2")
 recording.onRunStarted(recordingRuntime, { CurrentRoom = { RoomSetName = "F" } })
 recording.syncSettings(recordingRuntime)
 assertEqual(recording.status().text, "Recorded 2 / 2")
-assertEqual(recordingBatch.session().runs[2].igtCs, 2200)
+assertEqual(recordingBatch.session().groups[2].heading.igtCs, 2200)
 recording.start(recordingRuntime)
 assertEqual(recordingCache.RecordingReady, true)
 assertEqual(recording.status().text, "Recording ready for 2 runs")
@@ -204,18 +199,13 @@ local restoredRuntime = {
     }),
 }
 local restoredSplits = assert(loadfile("src/timer/splits.lua"))({
-    routeOf = support.routeOf,
+    keys = support.keys,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function(run)
         return run and run.Cleared == true
     end,
 })
-local restoredBatch = assert(loadfile("src/timer/batch.lua"))({
-    newSession = support.newSession,
-    isRunSuccess = function(run)
-        return run and run.Cleared == true
-    end,
-})
+local restoredBatch = assert(loadfile("src/timer/batch.lua"))(support.batchDeps())
 local restoredRecording = assert(loadfile("src/timer/recording.lua"))(support.recordingDeps({
     splits = restoredSplits,
     batch = restoredBatch,
@@ -229,18 +219,13 @@ local bridgeSettings = {
     BatchTargetRuns = 2,
 }
 local bridgeSplits = assert(loadfile("src/timer/splits.lua"))({
-    routeOf = support.routeOf,
+    keys = support.keys,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function(run)
         return run and run.Cleared == true
     end,
 })
-local bridgeBatch = assert(loadfile("src/timer/batch.lua"))({
-    newSession = support.newSession,
-    isRunSuccess = function(run)
-        return run and run.Cleared == true
-    end,
-})
+local bridgeBatch = assert(loadfile("src/timer/batch.lua"))(support.batchDeps())
 local bridgeRecording
 local bridgeSingleRun = assert(loadfile("src/timer/single_run/single_run.lua"))({
     core = core,
@@ -342,7 +327,7 @@ bridgeHooks.RecordRunStats(bridgeHost, bridgeRuntime, function()
     return true
 end)
 assertEqual(bridgeRecording.status().text, "Recording 1 / 2")
-assertEqual(bridgeBatch.session().runs[1].igtCs, 500)
+assertEqual(bridgeBatch.session().groups[1].heading.igtCs, 500)
 setTime(0)
 _G.CurrentRun = nil
 
@@ -361,16 +346,13 @@ local singleRuntime = {
     status = newRuntimeState(singleStatusStore),
 }
 local singleSplits = assert(loadfile("src/timer/splits.lua"))({
-    routeOf = support.routeOf,
+    keys = support.keys,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = support.isRunSuccess,
 })
 local singleRecording = assert(loadfile("src/timer/recording.lua"))(support.recordingDeps({
     splits = singleSplits,
-    batch = assert(loadfile("src/timer/batch.lua"))({
-        newSession = support.newSession,
-        isRunSuccess = support.isRunSuccess,
-    }),
+    batch = assert(loadfile("src/timer/batch.lua"))(support.batchDeps()),
 }))
 local singleTimer = {
     getInGameTime = function()

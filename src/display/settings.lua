@@ -17,6 +17,13 @@ function settings.isRecordingTableVisible(runtime)
     return runtime.data.read("ShowRecordingTable") == true
 end
 
+--- The single-run splits table; hidden when the multi-run table already shows the current
+--- attempt's splits.
+function settings.isSplitsTableVisible(runtime)
+    return settings.isRecordingTableVisible(runtime)
+        and not (timer.recording.isMultiRunMode() == true and timer.batch.keepsSplits() == true)
+end
+
 function settings.isBatchVisible(runtime)
     return settings.isRecordingTableVisible(runtime)
         and timer.recording.isMultiRunMode() == true

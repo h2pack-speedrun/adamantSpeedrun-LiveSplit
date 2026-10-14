@@ -131,6 +131,28 @@ support.Session = assert(loadfile("src/timer/session.lua"))({
 })
 support.newSession = support.Session.new
 support.store = dofile("src/timer/session_store.lua")
+support.categories = dofile("src/timer/categories.lua")
+
+--- Settings of the old multi-run batch (Custom with default rules) for `runs` runs.
+function support.batchSettings(runs)
+    return support.categories.settingsFor("custom", {
+        read = function(alias)
+            if alias == "BatchTargetRuns" then
+                return runs
+            end
+            return nil
+        end,
+    })
+end
+
+function support.batchDeps()
+    return {
+        newSession = support.newSession,
+        isRunSuccess = support.isRunSuccess,
+        keys = support.keys,
+        categoryNames = support.categories.NAMES,
+    }
+end
 
 --- Recording dependencies shared by tests; game reads default to "no save loaded".
 function support.recordingDeps(overrides)
@@ -147,6 +169,7 @@ function support.recordingDeps(overrides)
             return nil
         end,
         store = support.store,
+        categories = support.categories,
     }
     for key, value in pairs(overrides or {}) do
         result[key] = value

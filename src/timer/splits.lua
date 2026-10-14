@@ -1,23 +1,10 @@
 local deps = ...
 local toCentiseconds = deps.toCentiseconds
 local isRunSuccess = deps.isRunSuccess
-local routeOf = deps.routeOf
+local keys = deps.keys
 
-local ROUTES = {
-    underworld = { "F", "G", "H", "I" },
-    surface = { "N", "O", "P", "Q" },
-}
-
-local BIOME_LABELS = {
-    F = "Erebus",
-    G = "Oceanus",
-    H = "Fields",
-    I = "Tartarus",
-    N = "Ephyra",
-    O = "Thessaly",
-    P = "Olympus",
-    Q = "Summit",
-}
+local ROUTES = keys.ROUTES
+local BIOME_LABELS = keys.BIOME_NAMES
 
 local EMPTY_ROUTE = {}
 local EMPTY_SNAPSHOT = {}
@@ -84,7 +71,7 @@ local function clearRows()
 end
 
 local function detectRoute(run)
-    local routeType = routeOf(run)
+    local routeType = keys.routeOf(run)
     if routeType == "dream" then
         return routeType, {}
     end

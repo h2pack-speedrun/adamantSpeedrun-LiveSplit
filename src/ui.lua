@@ -1,4 +1,5 @@
 local data = import("data.lua")
+local categories = import("timer/categories.lua")
 local formatCentiseconds = import("display/time_format.lua").formatCentiseconds
 
 local module = {}
@@ -20,10 +21,6 @@ local TIMER_MODE_OPTIONS = {
         tooltip = "Show real time with map-load time removed.",
     },
 }
-local RECORDING_MODE_LABELS = {
-    single = "Single run",
-    multi = "Multi-run batch",
-}
 local MUTED_TEXT_COLOR = { 0.65, 0.65, 0.65, 1.0 }
 local WARNING_TEXT_COLOR = { 1.0, 0.78, 0.35, 1.0 }
 local STATUS_TEXT_COLORS = {
@@ -44,11 +41,31 @@ local SHOW_RECORDING_TABLE_OPTS = {
     label = "Show run splits",
     tooltip = "Show run split as a table while recording.",
 }
-local RECORDING_MODE_OPTS = {
-    values = data.recordingModes,
-    default = "single",
-    displayValues = RECORDING_MODE_LABELS,
-    optionsPerLine = 2,
+local CATEGORY_OPTS = {
+    label = "Category",
+    values = categories.ORDER,
+    displayValues = categories.NAMES,
+    controlWidth = 180,
+}
+local CUSTOM_DISTINCT_OPTS = {
+    label = "Each counted run needs a new",
+    tooltip = "None counts every cleared run.",
+    values = categories.KEY_VALUES,
+    displayValues = categories.KEY_NAMES,
+    controlWidth = 140,
+}
+local CUSTOM_SAME_OPTS = {
+    label = "Every run must keep the same",
+    tooltip = "Runs that change it are marked invalid and do not count.",
+    values = categories.KEY_VALUES,
+    displayValues = categories.KEY_NAMES,
+    controlWidth = 140,
+}
+local CUSTOM_ON_DEATH_OPTS = {
+    label = "On death",
+    values = categories.ON_DEATH_VALUES,
+    displayValues = categories.ON_DEATH_NAMES,
+    controlWidth = 180,
 }
 local RESUME_AFTER_RESTART_OPTS = {
     label = "Resume after restart",
@@ -148,6 +165,27 @@ local function readRecordingMode(state)
     return normalized
 end
 
+--- The picker category. RecordingMode follows it; a setup from before categories existed (multi-run
+--- mode) moves to Custom once, which keeps its old batch rules.
+local function readCategory(state)
+    if state.read("CategoryVersion") ~= 1 then
+        if readRecordingMode(state) == "multi" then
+            state.write("Category", categories.CUSTOM)
+        end
+        state.write("CategoryVersion", 1)
+    end
+    local category = state.read("Category")
+    if categories.NAMES[category] == nil then
+        category = categories.SINGLE
+        state.write("Category", category)
+    end
+    local mode = category == categories.SINGLE and "single" or "multi"
+    if readRecordingMode(state) ~= mode then
+        state.write("RecordingMode", mode)
+    end
+    return category
+end
+
 local function withAction(opts, action)
     opts.action = action
     return opts
@@ -183,9 +221,19 @@ local function getRecordingStatus(statusView)
     return statusKind, statusText
 end
 
-local function drawRecordingControls(draw, state, actions, recordingMode, statusKind)
-    if recordingMode == "multi" then
-        draw.widgets.stepper(state.get("BatchTargetRuns"), BATCH_TARGET_RUNS_OPTS)
+local function drawCustomRules(draw, state)
+    draw.widgets.stepper(state.get("BatchTargetRuns"), BATCH_TARGET_RUNS_OPTS)
+    draw.widgets.dropdown(state.get("CustomDistinct"), CUSTOM_DISTINCT_OPTS)
+    draw.widgets.dropdown(state.get("CustomSame"), CUSTOM_SAME_OPTS)
+    draw.widgets.dropdown(state.get("CustomOnDeath"), CUSTOM_ON_DEATH_OPTS)
+end
+
+local function drawRecordingControls(draw, state, actions, category, statusKind)
+    draw.widgets.text(categories.RULES_TEXT[category] or "", MUTED_TEXT_OPTS)
+    if category == categories.CUSTOM then
+        drawCustomRules(draw, state)
+    end
+    if category ~= categories.SINGLE then
         draw.widgets.checkbox(state.get("ResumeAfterRestart"), RESUME_AFTER_RESTART_OPTS)
     end
 
@@ -198,10 +246,10 @@ local function drawRecordingSection(draw, state, actions, statusView, showRecord
     draw.widgets.text("Status: " .. statusText, {
         color = STATUS_TEXT_COLORS[statusKind] or MUTED_TEXT_COLOR,
     })
-    draw.widgets.radio(state.get("RecordingMode"), RECORDING_MODE_OPTS)
+    draw.widgets.dropdown(state.get("Category"), CATEGORY_OPTS)
 
-    local recordingMode = readRecordingMode(state)
-    drawRecordingControls(draw, state, actions, recordingMode, statusKind)
+    local category = readCategory(state)
+    drawRecordingControls(draw, state, actions, category, statusKind)
 
     if statusKind == "active" and not showRecordingTable and not showRawTimers then
         draw.widgets.text(

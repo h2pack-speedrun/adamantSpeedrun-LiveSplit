@@ -61,11 +61,12 @@ function ensureOverlays()
             paging = display.paging,
             readPageSize = settings.pageSize,
             maxPageSize = data.pageSize.max,
+            maxBiomes = data.maxAttemptBiomes,
         }),
         splits = import('display/overlay_splits.lua', nil, {
             currentRun = timer.currentRun,
             overlay = overlay,
-            isVisible = settings.isRecordingTableVisible,
+            isVisible = settings.isSplitsTableVisible,
             isModeVisible = settings.isModeVisible,
             formatCache = formatCache,
         }),

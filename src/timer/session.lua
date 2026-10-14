@@ -15,6 +15,7 @@ Session.__index = Session
 ---@field distinct string "none" or a key each counted attempt must add a new value of.
 ---@field same string "none" or a key every attempt must share with the first valid attempt.
 ---@field onDeath string "continue" logs the failure; "reset" ends the session as failed.
+---@field allowed table<string, boolean>? Permitted values of the `distinct` key; others are invalid.
 
 --- Attempt statuses: "active", "counted", "failed", "duplicate", "invalid".
 ---@param settings LiveSplitSessionSettings
@@ -80,6 +81,19 @@ local function breaksSameRule(self, attemptKeys)
     return attemptKeys[sameKey] ~= self.referenceKeys[sameKey]
 end
 
+-- A run whose distinct key cannot be read, or is not a permitted value, can never count.
+local function breaksDistinctRule(self, attemptKeys)
+    local distinctKey = self.settings.distinct
+    if distinctKey == "none" then
+        return false
+    end
+    local value = attemptKeys[distinctKey]
+    if value == nil then
+        return true
+    end
+    return self.settings.allowed ~= nil and self.settings.allowed[value] ~= true
+end
+
 --- Starts an attempt for the run with game ordinal `runOrdinal`. A still-unfinished attempt is
 --- dropped first, as the previous run was abandoned without being finalized. Returns nil when the
 --- session has ended.
@@ -104,7 +118,7 @@ function Session:startAttempt(attemptKeys, runOrdinal)
         status = "active",
         finished = false,
     }
-    if breaksSameRule(self, attemptKeys) then
+    if breaksDistinctRule(self, attemptKeys) or breaksSameRule(self, attemptKeys) then
         attempt.status = "invalid"
     elseif self.referenceKeys == nil then
         self.referenceKeys = attemptKeys
@@ -225,6 +239,7 @@ function Session:toRecord()
             sessionRtaCs = attempt.sessionRtaCs,
             sessionLrtCs = attempt.sessionLrtCs,
             countIndex = attempt.countIndex,
+            biomes = attempt.biomes,
         }
         for _, keyName in ipairs(KEY_NAMES) do
             row[keyName] = attempt.keys[keyName]
@@ -264,6 +279,7 @@ function Session.restore(settings, record)
             sessionRtaCs = row.sessionRtaCs,
             sessionLrtCs = row.sessionLrtCs,
             countIndex = row.countIndex,
+            biomes = row.biomes or {},
         }
         session.attempts[index] = attempt
         if attempt.status ~= "invalid" and session.referenceKeys == nil then

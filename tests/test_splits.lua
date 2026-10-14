@@ -22,7 +22,7 @@ local splitSnapshot = {
 }
 
 local timerSplits = assert(loadfile("src/timer/splits.lua"))({
-    routeOf = support.routeOf,
+    keys = support.keys,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function(run)
         return run and run.Cleared == true
@@ -83,7 +83,7 @@ assertEqual(timerSplits.hasDetails(), false)
 assertEqual(timerSplits.isStarted(), false)
 
 local overlaySplits = assert(loadfile("src/timer/splits.lua"))({
-    routeOf = support.routeOf,
+    keys = support.keys,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function(run)
         return run and run.Cleared == true
@@ -144,7 +144,7 @@ assertEqual(projectedSplitTables.splits[2].label, "Erebus")
 
 -- Rendering rows never starts a run; adoptRun explicitly picks up a run already underway.
 local adoptSplits = assert(loadfile("src/timer/splits.lua"))({
-    routeOf = support.routeOf,
+    keys = support.keys,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function()
         return true

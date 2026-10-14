@@ -16,17 +16,18 @@ local function snapshot()
     return singleRun.getSnapshot()
 end
 
-local function updateLiveRecordingRows(timer, run, timerSnapshot)
+local function updateLiveRecordingRows(runtime, timer, run, timerSnapshot)
     if timer then
         recording.adoptRun(run)
         splits.recordCompletedBiomes(timer, run, timerSnapshot)
         splits.updateLiveRows(timer, run, timerSnapshot)
+        recording.captureBiomes(runtime, run)
     end
 end
 
-function runLoop.updateTick()
+function runLoop.updateTick(runtime)
     local timer = singleRun.updateTick()
-    updateLiveRecordingRows(timer, getCurrentRun(), snapshot())
+    updateLiveRecordingRows(runtime, timer, getCurrentRun(), snapshot())
 end
 
 function runLoop.hasActiveDisplayLoop()
@@ -57,7 +58,7 @@ function runLoop.installHooks(hooks)
         end,
         onDisplayChanged = function(runtime)
             recording.onPlayResumed(runtime)
-            updateLiveRecordingRows(activeTimer(), getCurrentRun(), snapshot())
+            updateLiveRecordingRows(runtime, activeTimer(), getCurrentRun(), snapshot())
             onChanged(runtime)
         end,
         onCheckpoint = function(runtime)

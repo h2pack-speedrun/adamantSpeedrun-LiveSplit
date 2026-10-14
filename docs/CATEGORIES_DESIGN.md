@@ -1,6 +1,6 @@
 # Category Sessions Design
 
-Status: phases 1-3 implemented; phase 4 pending. See the phases at the end.
+Status: phases 1-4 implemented; phase 5 (shared Lib hotkeys) is optional. See the phases at the end.
 
 ## Goal
 
@@ -109,9 +109,9 @@ worth resuming.
 **Storage.** Persisted module status (`data.buildStatus`): `SessionState` (`open`, `completed`,
 `failed`, or empty), `SessionRuns`, the session clocks `SessionRtaCs`, `SessionLoadCs` and
 `SessionIgtCs`, and the `SessionAttempts` table (status, route, weapon, aspect, run ordinal and
-end times per attempt, capped at `data.maxSessionAttempts`). `timer/session_store.lua` maps a
+end times and up to four biome splits per attempt, capped at `data.maxSessionAttempts`). `timer/session_store.lua` maps a
 session record to these fields. Every persisted status write rewrites the module config file
-(about 40 KB at 60 attempts), so writes stay incremental: one table row per attempt change, and
+(about 90 KB at 60 attempts), so writes stay incremental: one table row per attempt change, and
 only the clocks at checkpoints.
 
 **When it saves.** When an attempt starts and when it ends, and at every game checkpoint: the
@@ -178,7 +178,13 @@ are added as new fields, so existing readers keep working.
    (`PageSize`), follow-newest, `PagePrevKey`/`PageNextKey` (default F7/F8), and the ImGui session
    history. A page key sets a pending flag that also satisfies the interval's `when`, so the new
    page projects within one tick even with no run active.
-4. **Categories.** Weapon and aspect key resolvers, name tables, the five presets, and the simple
-   and advanced UI.
+4. **Categories.** Done: `timer/keys.lua` reads the weapon (`Hero.Weapons`) and aspect (the
+   weapon's aspect trait in `Hero.TraitDictionary`) and holds English names from the game's
+   TraitText; `timer/categories.lua` defines the five presets and Custom. The picker writes
+   `Category` and `RecordingMode` follows it; a pre-category multi-run setup moves to Custom once
+   (`CategoryVersion`). All Regions only counts underworld and surface runs (`allowed`), keeps
+   each attempt's biome splits with session-cumulative times, shows the current region live in the
+   session table, and hides the separate single-run splits table. A run whose distinct key cannot
+   be read is invalid. Session rules are saved with the session so a resumed session keeps them.
 5. **Optional.** Move hotkey polling into Lib as a shared capability with cross-module conflict
    detection.

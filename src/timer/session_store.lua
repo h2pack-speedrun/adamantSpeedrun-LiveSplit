@@ -12,6 +12,7 @@ local SAVED_STATES = {
     completed = true,
     failed = true,
 }
+local MAX_BIOMES = 4
 local KEY_COLUMNS = {
     route = "Route",
     weapon = "Weapon",
@@ -45,6 +46,14 @@ local function toRow(attempt)
     for keyName, column in pairs(KEY_COLUMNS) do
         row[column] = attempt[keyName] or ""
     end
+    for index = 1, MAX_BIOMES do
+        local split = attempt.biomes and attempt.biomes[index]
+        local prefix = "B" .. index
+        row[prefix .. "Code"] = split and split.code or ""
+        row[prefix .. "IgtCs"] = split and split.igtCs or 0
+        row[prefix .. "RtaCs"] = split and split.rtaCs or 0
+        row[prefix .. "LrtCs"] = split and split.lrtCs or 0
+    end
     return row
 end
 
@@ -61,21 +70,46 @@ local function fromRow(row)
     for keyName, column in pairs(KEY_COLUMNS) do
         attempt[keyName] = emptyToNil(row[column])
     end
+    local biomes = {}
+    for index = 1, MAX_BIOMES do
+        local prefix = "B" .. index
+        local code = emptyToNil(row[prefix .. "Code"])
+        if code ~= nil then
+            biomes[#biomes + 1] = {
+                code = code,
+                igtCs = row[prefix .. "IgtCs"],
+                rtaCs = row[prefix .. "RtaCs"],
+                lrtCs = row[prefix .. "LrtCs"],
+            }
+        end
+    end
+    attempt.biomes = biomes
     return attempt
+end
+
+-- Each persisted status write rewrites the config file; skip writes that change nothing.
+local function writeIfChanged(status, alias, value)
+    if status.read(alias) ~= value then
+        status.write(alias, value)
+    end
 end
 
 --- Session clocks: called at game checkpoints and whenever totals change.
 function store.saveClocks(status, record)
-    status.write("SessionRtaCs", record.rtaCs)
-    status.write("SessionLoadCs", record.loadCs)
+    writeIfChanged(status, "SessionRtaCs", record.rtaCs)
+    writeIfChanged(status, "SessionLoadCs", record.loadCs)
 end
 
---- Session state, run target, clocks and summed IGT.
-function store.saveTotals(status, record, runs)
-    status.write("SessionState", record.state)
-    status.write("SessionRuns", runs)
+--- Session state, rules, clocks and summed IGT.
+function store.saveTotals(status, record, settings)
+    writeIfChanged(status, "SessionState", record.state)
+    writeIfChanged(status, "SessionCategory", settings.category or "")
+    writeIfChanged(status, "SessionDistinct", settings.distinct or "")
+    writeIfChanged(status, "SessionSame", settings.same or "")
+    writeIfChanged(status, "SessionOnDeath", settings.onDeath or "")
+    writeIfChanged(status, "SessionRuns", settings.runs)
     store.saveClocks(status, record)
-    status.write("SessionIgtCs", record.igtCs)
+    writeIfChanged(status, "SessionIgtCs", record.igtCs)
 end
 
 --- Saves attempt `index` from the record, appending it or replacing the stored row.
@@ -92,15 +126,19 @@ function store.saveAttempt(status, record, index)
 end
 
 function store.clear(status)
-    status.write("SessionState", "")
-    status.write("SessionRuns", 0)
-    status.write("SessionRtaCs", 0)
-    status.write("SessionLoadCs", 0)
-    status.write("SessionIgtCs", 0)
+    writeIfChanged(status, "SessionState", "")
+    writeIfChanged(status, "SessionCategory", "")
+    writeIfChanged(status, "SessionDistinct", "")
+    writeIfChanged(status, "SessionSame", "")
+    writeIfChanged(status, "SessionOnDeath", "")
+    writeIfChanged(status, "SessionRuns", 0)
+    writeIfChanged(status, "SessionRtaCs", 0)
+    writeIfChanged(status, "SessionLoadCs", 0)
+    writeIfChanged(status, "SessionIgtCs", 0)
     status.get(ATTEMPTS):clear()
 end
 
---- The saved session record and its run target, or nil when nothing is saved.
+--- The saved session record and its saved rules, or nil when nothing is saved.
 function store.load(status)
     local state = status.read("SessionState")
     if not SAVED_STATES[state] then
@@ -116,7 +154,13 @@ function store.load(status)
         loadCs = status.read("SessionLoadCs"),
         igtCs = status.read("SessionIgtCs"),
         attempts = attempts,
-    }, status.read("SessionRuns")
+    }, {
+        category = status.read("SessionCategory"),
+        distinct = status.read("SessionDistinct"),
+        same = status.read("SessionSame"),
+        onDeath = status.read("SessionOnDeath"),
+        runs = status.read("SessionRuns"),
+    }
 end
 
 return store

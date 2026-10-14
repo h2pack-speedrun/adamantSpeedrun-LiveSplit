@@ -34,9 +34,10 @@ The timer can show these timing columns:
 - Show or hide the recording table.
 - Show optional raw IGT/RTA/LrT timer rows while recording is active.
 - Choose which timer columns are visible.
-- Use single-run split mode or multi-run batch recording.
-- Record a batch of 1 to 10 runs and keep cumulative batch totals.
-- **Single-run recording continues across runs until you stop it.** A multi-run batch stops when it completes or a run fails, keeping its results until you press Start New.
+- Pick a category: Single Run, All Regions (Underworld and Surface with one aspect), 3 Weapons, One Weapon (all 4 aspects of a weapon), All Weapons, All Aspects, or Custom for your own rules.
+- Multi-run categories log every attempt: deaths are shown as failed runs and the session keeps going. All Regions keeps the biome splits of both regions.
+- Custom sets your own rules: 1 to 10 runs, which key must be new or stay the same each run, and whether a death ends the session.
+- **Single-run recording continues across runs until you stop it.** A multi-run session stops when it completes (or, in Custom, when a death ends it), keeping its results until you press Start New.
 - Disabling LiveSplit or the pack clears the current recording but keeps it armed for when you re-enable.
 - The multi-run overlay shows one page of finished runs; page through older ones with F7/F8 (configurable). The module tab lists the full session history.
 - Multi-run sessions survive a game exit or crash (Resume after restart, on by default); time while the game is closed is not counted.

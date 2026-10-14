@@ -1,5 +1,6 @@
 -- Multi-run session table: a pinned header, one page of finished attempts, the current attempt
--- and the session total.
+-- and the session total. In categories that keep splits, each attempt shows its biome rows and a
+-- page holds whole attempts.
 
 local deps = ...
 local batch = deps.batch
@@ -10,17 +11,26 @@ local formatCache = deps.formatCache
 local paging = deps.paging
 local readPageSize = deps.readPageSize
 local maxPageSize = deps.maxPageSize
+local maxBiomes = deps.maxBiomes
 
 local batchOverlay = {}
 local projectionRows = {}
 local projectionPageRows = {}
+local projectionCurrentRows = {}
 local projectionHeaderRow = { key = "header", label = "", igt = "", rta = "", lrt = "" }
-local projectionCurrentRow = { key = "current", label = "", igt = "", rta = "", lrt = "" }
 local projectionTotalRow = { key = "total", label = "", igt = "", rta = "", lrt = "" }
 local projectionCount = 0
 
+local function newProjection(key)
+    return { key = key, label = "", igt = "", rta = "", lrt = "" }
+end
+
 for index = 1, maxPageSize do
-    projectionPageRows[index] = { key = "page" .. index, label = "", igt = "", rta = "", lrt = "" }
+    projectionPageRows[index] = newProjection("page" .. index)
+end
+projectionCurrentRows[1] = newProjection("current")
+for index = 1, maxBiomes do
+    projectionCurrentRows[index + 1] = newProjection("current" .. index)
 end
 
 local function batchVisible(_, runtime)
@@ -51,7 +61,7 @@ local function appendProjectionRow(source, projection, runtime)
 end
 
 local function headerLabel(rows, page, pages)
-    local label = ("Runs %d/%d"):format(rows.completedRuns, rows.targetRuns)
+    local label = ("%s %d/%d"):format(rows.title, rows.completedRuns, rows.targetRuns)
     if rows.failedCount > 0 then
         label = label .. (" · %d failed"):format(rows.failedCount)
     end
@@ -80,8 +90,8 @@ function batchOverlay.register(overlays, order)
         componentName = "LiveSplit_Batch",
         region = overlay.region,
         order = order,
-        -- Header, one page of attempts, current attempt, total.
-        maxRows = maxPageSize + 3,
+        -- Header, one page of attempts, the current attempt with its biomes, total.
+        maxRows = maxPageSize + maxBiomes + 3,
         columnGap = overlay.timerTableColumnGap,
         columns = overlay.buildTimerTableColumns(isModeVisible),
         visible = batchVisible,
@@ -97,13 +107,28 @@ function batchOverlay.buildRows(runtime)
     end
 
     local rows = batch.session()
-    local pageSize = math.min(readPageSize(runtime), maxPageSize)
-    local first, last, page, pages = paging.view(rows.finishedCount, pageSize)
+    local pageRows = math.min(readPageSize(runtime), maxPageSize)
+    -- With splits, an attempt takes a heading row plus its biome rows.
+    local attemptsPerPage = rows.splits and math.max(1, math.floor(pageRows / (maxBiomes + 1))) or pageRows
+    local first, last, page, pages = paging.view(rows.finishedCount, attemptsPerPage)
     appendHeader(rows, page, pages, runtime)
+    local slot = 0
     for index = first, last do
-        appendProjectionRow(rows.runs[index], projectionPageRows[index - first + 1], runtime)
+        local group = rows.groups[index]
+        slot = slot + 1
+        appendProjectionRow(group.heading, projectionPageRows[slot], runtime)
+        for biome = 1, group.biomeCount do
+            if slot >= maxPageSize then
+                break
+            end
+            slot = slot + 1
+            appendProjectionRow(group.biomes[biome], projectionPageRows[slot], runtime)
+        end
     end
-    appendProjectionRow(rows.current, projectionCurrentRow, runtime)
+    appendProjectionRow(rows.current.heading, projectionCurrentRows[1], runtime)
+    for biome = 1, rows.current.biomeCount do
+        appendProjectionRow(rows.current.biomes[biome], projectionCurrentRows[biome + 1], runtime)
+    end
     appendProjectionRow(rows.total, projectionTotalRow, runtime)
     trimProjectionRows(previousCount)
     return projectionRows

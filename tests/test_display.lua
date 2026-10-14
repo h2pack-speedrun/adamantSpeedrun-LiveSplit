@@ -20,6 +20,9 @@ local settingsFake = {
     isRecordingTableVisible = function()
         return false
     end,
+    isSplitsTableVisible = function()
+        return false
+    end,
 }
 local projectionFake = {
     begin = function()

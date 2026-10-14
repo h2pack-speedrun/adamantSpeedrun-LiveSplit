@@ -5,19 +5,14 @@ local formatCache = support.formatCache
 local overlay = support.overlay
 local data = support.data
 
-local timerBatch = assert(loadfile("src/timer/batch.lua"))({
-    newSession = support.newSession,
-    isRunSuccess = function(run)
-        return run and run.Cleared == true
-    end,
-})
-timerBatch.start(2)
+local timerBatch = assert(loadfile("src/timer/batch.lua"))(support.batchDeps())
+timerBatch.start(support.batchSettings(2))
 assertEqual(timerBatch.status().kind, "ready")
 assertEqual(timerBatch.status().text, "Recording ready for 2 runs")
 assertEqual(timerBatch.time("rta"), nil)
 assertEqual(timerBatch.startRun(), true)
 assertEqual(timerBatch.status().kind, "active")
-assertEqual(timerBatch.session().current.label, "Current 1/2")
+assertEqual(timerBatch.session().current.heading.label, "Current 1/2")
 setTime(100)
 timerBatch.finalizeRun({
     getInGameTime = function()
@@ -29,10 +24,10 @@ timerBatch.finalizeRun({
 assertEqual(timerBatch.status().text, "Recording 1 / 2")
 assertEqual(timerBatch.time("igt"), 8000)
 assertEqual(timerBatch.time("rta"), 10000)
-assertEqual(timerBatch.session().runs[1].label, "Run 1/2")
-assertEqual(timerBatch.session().current.label, "")
+assertEqual(timerBatch.session().groups[1].heading.label, "Run 1/2")
+assertEqual(timerBatch.session().current.heading.label, "")
 assertEqual(timerBatch.startRun(), true)
-assertEqual(timerBatch.session().current.label, "Current 2/2")
+assertEqual(timerBatch.session().current.heading.label, "Current 2/2")
 setTime(190)
 timerBatch.finalizeRun({
     getInGameTime = function()
@@ -44,10 +39,10 @@ timerBatch.finalizeRun({
 assertEqual(timerBatch.status().kind, "recorded")
 assertEqual(timerBatch.status().text, "Recorded 2 / 2")
 assertEqual(timerBatch.time("igt"), 15000)
-assertEqual(timerBatch.session().runs[2].label, "Run 2/2")
-assertEqual(timerBatch.session().current.label, "")
+assertEqual(timerBatch.session().groups[2].heading.label, "Run 2/2")
+assertEqual(timerBatch.session().current.heading.label, "")
 
-timerBatch.start(3)
+timerBatch.start(support.batchSettings(3))
 assertEqual(timerBatch.startRun(), true)
 setTime(12)
 timerBatch.finalizeRun({
@@ -59,24 +54,19 @@ timerBatch.finalizeRun({
 })
 assertEqual(timerBatch.status().kind, "failed")
 assertEqual(timerBatch.status().text, "Failed (0 / 3 complete)")
-assertEqual(timerBatch.session().runs[1].label, "Failed")
-assertEqual(timerBatch.session().runs[1].igtCs, 900)
+assertEqual(timerBatch.session().groups[1].heading.label, "Failed")
+assertEqual(timerBatch.session().groups[1].heading.igtCs, 900)
 -- Session IGT sums every attempt, failed ones included.
 assertEqual(timerBatch.time("igt"), 900)
 setTime(0)
 
-timerBatch.start(12)
+timerBatch.start(support.batchSettings(12))
 assertEqual(timerBatch.status().text, "Recording ready for 12 runs")
 assertEqual(timerBatch.startRun(), true)
-assertEqual(timerBatch.session().current.label, "Current 1/12")
+assertEqual(timerBatch.session().current.heading.label, "Current 1/12")
 timerBatch.stop()
 
-local overlayBatch = assert(loadfile("src/timer/batch.lua"))({
-    newSession = support.newSession,
-    isRunSuccess = function(run)
-        return run and run.Cleared == true
-    end,
-})
+local overlayBatch = assert(loadfile("src/timer/batch.lua"))(support.batchDeps())
 local batchPaging = dofile("src/display/paging.lua")
 local batchPageSize = 2
 local batchOverlayAdapter = assert(loadfile("src/display/overlay_batch.lua"))({
@@ -97,6 +87,7 @@ local batchOverlayAdapter = assert(loadfile("src/display/overlay_batch.lua"))({
         return batchPageSize
     end,
     maxPageSize = data.pageSize.max,
+    maxBiomes = data.maxAttemptBiomes,
 })
 local batchOverlayDeclarations = {}
 batchOverlayAdapter.register({
@@ -106,9 +97,9 @@ batchOverlayAdapter.register({
 }, 300)
 assert(batchOverlayDeclarations.batch ~= nil, "expected batch table declaration")
 assertEqual(batchOverlayDeclarations.batch.order, 300)
-assertEqual(batchOverlayDeclarations.batch.maxRows, data.pageSize.max + 3)
+assertEqual(batchOverlayDeclarations.batch.maxRows, data.pageSize.max + data.maxAttemptBiomes + 3)
 assertEqual(batchOverlayDeclarations.batch.visible(), false)
-overlayBatch.start(5)
+overlayBatch.start(support.batchSettings(5))
 overlayBatch.startRun()
 assertEqual(batchOverlayDeclarations.batch.visible(), true)
 local batchOverlayRows = batchOverlayAdapter.buildRows(nil)
