@@ -38,6 +38,7 @@ The timer can show these timing columns:
 - Record a batch of 1 to 10 runs and keep cumulative batch totals.
 - **Single-run recording continues across runs until you stop it.** A multi-run batch stops when it completes or a run fails, keeping its results until you press Start New.
 - Disabling LiveSplit or the pack clears the current recording but keeps it armed for when you re-enable.
+- The multi-run overlay shows one page of finished runs; page through older ones with F7/F8 (configurable). The module tab lists the full session history.
 - Multi-run sessions survive a game exit or crash (Resume after restart, on by default); time while the game is closed is not counted.
 
 ### Single-Run Recording

@@ -8,6 +8,19 @@ data.batchTargetRuns = {
 
 data.recordingModes = { "single", "multi" }
 
+-- Finished attempts per overlay page.
+data.pageSize = {
+    default = 5,
+    min = 1,
+    max = 10,
+}
+
+-- Page hotkeys follow Quick Pause: F1 opens the Hell2Modding overlay, and Quick Pause defaults
+-- to F9, so LiveSplit defaults to F7 and F8.
+data.HOTKEY_NONE = ""
+data.hotkeyValues = { data.HOTKEY_NONE, "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12" }
+data.hotkeyDisplayValues = { [data.HOTKEY_NONE] = "None" }
+
 function data.normalizeRecordingMode(mode)
     if mode == "multi" then
         return "multi"
@@ -58,6 +71,28 @@ function data.buildStorage()
             type = "bool",
             alias = "ResumeAfterRestart",
             default = true,
+            hash = false,
+        },
+        {
+            type = "int",
+            alias = "PageSize",
+            default = data.pageSize.default,
+            min = data.pageSize.min,
+            max = data.pageSize.max,
+            hash = false,
+        },
+        {
+            type = "string",
+            alias = "PagePrevKey",
+            default = "F7",
+            maxLen = 8,
+            hash = false,
+        },
+        {
+            type = "string",
+            alias = "PageNextKey",
+            default = "F8",
+            maxLen = 8,
             hash = false,
         },
         {

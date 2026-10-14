@@ -1,6 +1,6 @@
 # Category Sessions Design
 
-Status: phases 1 and 2 implemented; phases 3 and 4 pending. See the phases at the end.
+Status: phases 1-3 implemented; phase 4 pending. See the phases at the end.
 
 ## Goal
 
@@ -174,7 +174,10 @@ are added as new fields, so existing readers keep working.
    and multi modes onto it with no visible change. Tests cover rules and status transitions.
 2. **Persistence.** Done: save and resume multi-run sessions with `ResumeAfterRestart`; RTA
    resumes without downtime.
-3. **Overlay.** Pinned and paged layout, follow-newest, page hotkeys, ImGui history view.
+3. **Overlay.** Done: pinned header, current and total rows around one page of finished attempts
+   (`PageSize`), follow-newest, `PagePrevKey`/`PageNextKey` (default F7/F8), and the ImGui session
+   history. A page key sets a pending flag that also satisfies the interval's `when`, so the new
+   page projects within one tick even with no run active.
 4. **Categories.** Weapon and aspect key resolvers, name tables, the five presets, and the simple
    and advanced UI.
 5. **Optional.** Move hotkey polling into Lib as a shared capability with cross-module conflict

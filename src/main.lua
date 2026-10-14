@@ -54,6 +54,12 @@ local function init()
         fonts = module.overlays.fonts,
     })
     local ui = import("ui.lua")
+    local pageHotkeys = import("display/page_hotkeys.lua", nil, {
+        paging = display.paging,
+        isPagingActive = function()
+            return timer.recording.isMultiRunMode() and timer.batch.hasSession()
+        end,
+    })
 
     actions.attach(module, controller)
     sharedSnapshot.register(module.shared)
@@ -61,9 +67,14 @@ local function init()
     display.registerOverlays(module.overlays)
     ui.attach(module, {
         getRecordingStatus = timer.recording.status,
+        getSessionHistory = timer.batch.history,
     })
     module.onCommit(controller.onCommit)
-    module.onActivate(controller.onActivate)
+    module.onActivate(function(host, runtime)
+        controller.onActivate(host, runtime)
+        pageHotkeys.setLive(host, runtime)
+    end)
+    pageHotkeys.install()
 
     module.fallbackUi.attachGuiOnce(function(fallbackUi)
         rom.gui.add_imgui(fallbackUi.renderWindow)

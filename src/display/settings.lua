@@ -22,6 +22,10 @@ function settings.isBatchVisible(runtime)
         and timer.recording.isMultiRunMode() == true
 end
 
+function settings.pageSize(runtime)
+    return runtime.data.read("PageSize")
+end
+
 function settings.isModeVisible(mode, runtime)
     local alias = MODE_ALIASES[mode]
     if not alias then

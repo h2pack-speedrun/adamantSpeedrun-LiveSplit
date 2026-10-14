@@ -20,6 +20,7 @@ local TIMER_REFRESH_INTERVAL = 0.05
 
 local display = {
     settings = settings,
+    paging = import('display/paging.lua'),
 }
 local displayOverlays = nil
 local ensureOverlays
@@ -28,6 +29,7 @@ function display.project(ctx, opts)
     opts = opts or {}
     local runtime = opts.runtime
     projection.begin()
+    display.paging.takePending()
     local adapters = ensureOverlays()
     adapters.singleRun.project(ctx, runtime)
     adapters.batch.project(ctx, runtime)
@@ -52,11 +54,13 @@ function ensureOverlays()
                 hasSession = timer.batch.hasSession,
                 session = projection.batchSession,
             },
-            maxRows = data.batchTargetRuns.max,
             overlay = overlay,
             isVisible = settings.isBatchVisible,
             isModeVisible = settings.isModeVisible,
             formatCache = formatCache,
+            paging = display.paging,
+            readPageSize = settings.pageSize,
+            maxPageSize = data.pageSize.max,
         }),
         splits = import('display/overlay_splits.lua', nil, {
             currentRun = timer.currentRun,
@@ -86,7 +90,10 @@ function display.registerOverlays(overlays)
     overlays.onInterval("timer", TIMER_REFRESH_INTERVAL, function(host, runtime, ctx)
         overlayEvents.onInterval(host, runtime, ctx, display)
     end, {
-        when = overlayEvents.whenActive,
+        -- A page hotkey also wakes the interval so the new page shows even with no run active.
+        when = function(host)
+            return overlayEvents.whenActive(host) or display.paging.isPending()
+        end,
     })
 end
 

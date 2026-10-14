@@ -1,4 +1,5 @@
 local data = import("data.lua")
+local formatCentiseconds = import("display/time_format.lua").formatCentiseconds
 
 local module = {}
 
@@ -53,6 +54,33 @@ local RESUME_AFTER_RESTART_OPTS = {
     label = "Resume after restart",
     tooltip = "Keep the multi-run session across a game exit or crash. "
         .. "Time while the game is closed is not counted.",
+}
+local PAGE_SIZE_OPTS = {
+    label = "Runs per overlay page",
+    min = data.pageSize.min,
+    max = data.pageSize.max,
+    default = data.pageSize.default,
+}
+local PAGE_PREV_KEY_OPTS = {
+    label = "Previous page key",
+    tooltip = "Shows older finished runs in the overlay. Returns to the newest page when a run finishes.",
+    values = data.hotkeyValues,
+    displayValues = data.hotkeyDisplayValues,
+    controlWidth = 140,
+}
+local PAGE_NEXT_KEY_OPTS = {
+    label = "Next page key",
+    tooltip = "Shows newer finished runs; past the last page the overlay follows the newest runs again.",
+    values = data.hotkeyValues,
+    displayValues = data.hotkeyDisplayValues,
+    controlWidth = 140,
+}
+local HISTORY_HEIGHT = 180
+local HISTORY_STATUS_COLORS = {
+    counted = { 0.80, 0.82, 0.88, 1.0 },
+    failed = WARNING_TEXT_COLOR,
+    duplicate = MUTED_TEXT_COLOR,
+    invalid = MUTED_TEXT_COLOR,
 }
 local BATCH_TARGET_RUNS_OPTS = {
     label = "Runs to record",
@@ -200,11 +228,70 @@ local function drawDisplaySection(draw, state, includeColumns)
     end
 end
 
+local function drawPagingSection(draw, state)
+    drawSection(draw, "Multi-Run Overlay Pages",
+        "The overlay shows one page of finished runs; the keys page through older ones.")
+    draw.widgets.stepper(state.get("PageSize"), PAGE_SIZE_OPTS)
+    draw.widgets.dropdown(state.get("PagePrevKey"), PAGE_PREV_KEY_OPTS)
+    draw.widgets.dropdown(state.get("PageNextKey"), PAGE_NEXT_KEY_OPTS)
+end
+
+-- Formatted history lines, cached by the history list they were built from.
+local historyLines = {
+    source = nil,
+    lines = {},
+}
+
+local function formatOptional(valueCs)
+    return valueCs ~= nil and formatCentiseconds(valueCs) or "--"
+end
+
+local function getHistoryLines(history)
+    if history == historyLines.source then
+        return historyLines.lines
+    end
+    local lines = {}
+    for index, entry in ipairs(history) do
+        lines[index] = {
+            text = ("%3d  %-10s  IGT %s  RTA %s  LrT %s"):format(index, entry.label,
+                formatOptional(entry.sessionIgtCs), formatOptional(entry.sessionRtaCs),
+                formatOptional(entry.sessionLrtCs)),
+            opts = { color = HISTORY_STATUS_COLORS[entry.status] or MUTED_TEXT_COLOR },
+        }
+    end
+    historyLines.source = history
+    historyLines.lines = lines
+    return lines
+end
+
+local function drawHistorySection(draw, statusView)
+    local history = statusView.getSessionHistory()
+    if #history == 0 then
+        return
+    end
+    drawSection(draw, "Session History", "Every finished run in this session, with session totals at its end.")
+    local imgui = draw.imgui
+    local scrolling = imgui.BeginChild ~= nil
+    if scrolling then
+        imgui.BeginChild("LiveSplitSessionHistory", 0, HISTORY_HEIGHT, true)
+    end
+    for _, line in ipairs(getHistoryLines(history)) do
+        draw.widgets.text(line.text, line.opts)
+    end
+    if scrolling then
+        imgui.EndChild()
+    end
+end
+
 function module.drawTab(draw, state, actions, statusView)
     local showRecordingTable = readBool(state, "ShowRecordingTable", true)
     local showRawTimers = readBool(state, "ShowRawTimers", false)
     drawRecordingSection(draw, state, actions, statusView, showRecordingTable, showRawTimers)
     drawDisplaySection(draw, state, true)
+    if readRecordingMode(state) == "multi" then
+        drawPagingSection(draw, state)
+        drawHistorySection(draw, statusView)
+    end
 end
 
 function module.drawQuickContent(draw, state, actions, statusView)

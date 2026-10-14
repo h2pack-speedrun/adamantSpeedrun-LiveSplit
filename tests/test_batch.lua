@@ -77,12 +77,13 @@ local overlayBatch = assert(loadfile("src/timer/batch.lua"))({
         return run and run.Cleared == true
     end,
 })
+local batchPaging = dofile("src/display/paging.lua")
+local batchPageSize = 2
 local batchOverlayAdapter = assert(loadfile("src/display/overlay_batch.lua"))({
     batch = {
         hasSession = overlayBatch.hasSession,
         session = overlayBatch.session,
     },
-    maxRows = data.batchTargetRuns.max,
     overlay = overlay,
     isVisible = function()
         return true
@@ -91,6 +92,11 @@ local batchOverlayAdapter = assert(loadfile("src/display/overlay_batch.lua"))({
         return mode ~= "rta"
     end,
     formatCache = formatCache,
+    paging = batchPaging,
+    readPageSize = function()
+        return batchPageSize
+    end,
+    maxPageSize = data.pageSize.max,
 })
 local batchOverlayDeclarations = {}
 batchOverlayAdapter.register({
@@ -100,38 +106,84 @@ batchOverlayAdapter.register({
 }, 300)
 assert(batchOverlayDeclarations.batch ~= nil, "expected batch table declaration")
 assertEqual(batchOverlayDeclarations.batch.order, 300)
-assertEqual(batchOverlayDeclarations.batch.maxRows, data.batchTargetRuns.max + 1)
+assertEqual(batchOverlayDeclarations.batch.maxRows, data.pageSize.max + 3)
 assertEqual(batchOverlayDeclarations.batch.visible(), false)
-overlayBatch.start(2)
+overlayBatch.start(5)
 overlayBatch.startRun()
 assertEqual(batchOverlayDeclarations.batch.visible(), true)
 local batchOverlayRows = batchOverlayAdapter.buildRows(nil)
-assertEqual(batchOverlayRows[1].key, "current")
-assertEqual(batchOverlayRows[1].label, "Current 1/2")
-assertEqual(batchOverlayRows[1].igt, "")
+assertEqual(batchOverlayRows[1].key, "header")
+assertEqual(batchOverlayRows[1].label, "Runs 0/5")
+assertEqual(batchOverlayRows[1].igt, "IGT")
 assertEqual(batchOverlayRows[1].rta, "")
-assertEqual(batchOverlayRows[1].lrt, "")
+assertEqual(batchOverlayRows[2].key, "current")
+assertEqual(batchOverlayRows[2].label, "Current 1/5")
+assertEqual(batchOverlayRows[2].igt, "")
+assertEqual(batchOverlayRows[3].key, "total")
+assertEqual(batchOverlayRows[3].label, "Total")
 local batchSession = overlayBatch.session({
     getInGameTime = function()
         return 7
     end,
 })
 assertEqual(batchSession.currentTime.igtCs, 700)
+
+local function finishBatchRun(igt)
+    overlayBatch.finalizeRun({
+        getInGameTime = function()
+            return igt
+        end,
+    }, {
+        Cleared = true,
+    })
+end
 setTime(10)
-overlayBatch.finalizeRun({
-    getInGameTime = function()
-        return 8
-    end,
-}, {
-    Cleared = true,
-})
+finishBatchRun(8)
 local projectedBatchTables = {}
-batchOverlayAdapter.project({
-    setTable = function(name, rows)
-        projectedBatchTables[name] = rows
-    end,
-})
-assertEqual(projectedBatchTables.batch[1].key, "run1")
-assertEqual(projectedBatchTables.batch[1].label, "Run 1/2")
-assertEqual(projectedBatchTables.batch[1].igt, "00:08.00")
+-- Mirrors display.project, which takes the pending page change as it projects.
+local function projectBatch()
+    batchPaging.takePending()
+    batchOverlayAdapter.project({
+        setTable = function(name, rows)
+            projectedBatchTables[name] = rows
+        end,
+    })
+    return projectedBatchTables.batch
+end
+local projected = projectBatch()
+assertEqual(projected[2].key, "page1")
+assertEqual(projected[2].label, "Run 1/5")
+assertEqual(projected[2].igt, "00:08.00")
+assertEqual(projected[3].label, "Total")
+assertEqual(projected[3].igt, "00:08.00")
+
+-- Paging: two attempts per page, following the newest page by default.
+for _, igt in ipairs({ 1, 1 }) do
+    overlayBatch.startRun()
+    finishBatchRun(igt)
+end
+projected = projectBatch()
+assertEqual(projected[1].label, "Runs 3/5 · p2/2")
+assertEqual(projected[2].label, "Run 3/5")
+assertEqual(projected[3].label, "Total")
+batchPaging.previous()
+assertEqual(batchPaging.isPending(), true)
+projected = projectBatch()
+assertEqual(projected[1].label, "Runs 3/5 · p1/2")
+assertEqual(projected[2].label, "Run 1/5")
+assertEqual(projected[3].label, "Run 2/5")
+batchPaging.previous()
+assertEqual(batchPaging.isPending(), false)
+-- A finished attempt snaps back to the newest page.
+overlayBatch.startRun()
+finishBatchRun(1)
+projected = projectBatch()
+assertEqual(projected[1].label, "Runs 4/5 · p2/2")
+assertEqual(projected[2].label, "Run 3/5")
+assertEqual(projected[3].label, "Run 4/5")
+-- Next past the last page returns to following the newest page.
+batchPaging.previous()
+batchPaging.next()
+projected = projectBatch()
+assertEqual(projected[1].label, "Runs 4/5 · p2/2")
 setTime(0)

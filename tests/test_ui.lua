@@ -110,3 +110,76 @@ uiModule.drawQuickContent({
     widgets = uiDraw.widgets,
 }, drawState, uiActions, uiStatusView)
 assertEqual(uiStepperOpts.max, support.data.batchTargetRuns.max)
+
+-- Full tab in multi-run mode: paging settings and the scrollable session history.
+local historyEntries = {
+    { label = "Run 1/3", status = "counted", sessionIgtCs = 6000, sessionRtaCs = 7000, sessionLrtCs = 6500 },
+    { label = "Failed", status = "failed", sessionIgtCs = 9000, sessionRtaCs = 11000, sessionLrtCs = nil },
+}
+local historyView = {
+    getRecordingStatus = function()
+        return uiStatus
+    end,
+    getSessionHistory = function()
+        return historyEntries
+    end,
+}
+local texts = {}
+local dropdownLabels = {}
+local childDepth = 0
+local fullDraw = {
+    imgui = {
+        SameLine = function() end,
+        Spacing = function() end,
+        BeginChild = function()
+            childDepth = childDepth + 1
+        end,
+        EndChild = function()
+            childDepth = childDepth - 1
+        end,
+    },
+    widgets = {
+        text = function(text, opts)
+            texts[#texts + 1] = { text = text, opts = opts }
+        end,
+        separator = function() end,
+        checkbox = function() return false end,
+        radio = function() return false end,
+        stepper = function() return false end,
+        dropdown = function(_, opts)
+            dropdownLabels[#dropdownLabels + 1] = opts.label
+            return false
+        end,
+        button = function(_, opts)
+            opts.action:stage(opts.value)
+            return true
+        end,
+    },
+}
+uiSessionValues.RecordingMode = "multi"
+uiModule.drawTab(fullDraw, drawState, uiActions, historyView)
+assertEqual(dropdownLabels[1], "Previous page key")
+assertEqual(dropdownLabels[2], "Next page key")
+assertEqual(childDepth, 0)
+local historyTexts = {}
+for _, entry in ipairs(texts) do
+    if entry.text:find("^%s*%d+  ") then
+        historyTexts[#historyTexts + 1] = entry
+    end
+end
+assertEqual(#historyTexts, 2)
+assert(historyTexts[1].text:find("Run 1/3", 1, true), historyTexts[1].text)
+assert(historyTexts[1].text:find("RTA 01:10.00", 1, true), historyTexts[1].text)
+assert(historyTexts[2].text:find("LrT --", 1, true), historyTexts[2].text)
+-- History lines are cached while the history list is unchanged.
+local firstLine = historyTexts[1].text
+texts = {}
+uiModule.drawTab(fullDraw, drawState, uiActions, historyView)
+local cachedLine = nil
+for _, entry in ipairs(texts) do
+    if entry.text:find("^%s*1  ") then
+        cachedLine = entry.text
+    end
+end
+assert(rawequal(cachedLine, firstLine), "expected cached history line")
+uiSessionValues.RecordingMode = "single"

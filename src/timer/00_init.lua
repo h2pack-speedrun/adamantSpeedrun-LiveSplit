@@ -92,6 +92,10 @@ function timer.batch.session()
     return batch.session(singleRun.getActiveTimer())
 end
 
+function timer.batch.history()
+    return batch.history()
+end
+
 function timer.batch.hasSession()
     return batch.hasSession()
 end

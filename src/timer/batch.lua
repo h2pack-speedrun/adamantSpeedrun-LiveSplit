@@ -12,9 +12,13 @@ local rows = {
     failed = false,
     targetRuns = 0,
     completedRuns = 0,
+    -- Finished attempts in rows.runs (the first finishedCount entries), and how many failed.
+    finishedCount = 0,
+    failedCount = 0,
     runs = {},
     current = { label = "", igtCs = nil, rtaCs = nil, lrtCs = nil },
     currentTime = { igtCs = nil, rtaCs = nil, lrtCs = nil },
+    total = { label = "", igtCs = nil, rtaCs = nil, lrtCs = nil },
 }
 
 local state = {
@@ -166,7 +170,11 @@ end
 function batch.updateRows(activeTimer)
     local attempts = state.session and state.session:getAttempts() or {}
     local finishedCount = 0
+    local failedCount = 0
     for _, attempt in ipairs(attempts) do
+        if attempt.status == "failed" then
+            failedCount = failedCount + 1
+        end
         if attempt.finished then
             finishedCount = finishedCount + 1
             rows.runs[finishedCount] = rows.runs[finishedCount] or { label = "", igtCs = nil, rtaCs = nil, lrtCs = nil }
@@ -194,6 +202,14 @@ function batch.updateRows(activeTimer)
         setRow(rows.currentTime, nil, nil, nil, nil)
     end
 
+    if batch.hasSession() then
+        setRow(rows.total, "Total", batch.time("igt", activeTimer), batch.time("rta"), batch.time("lrt"))
+    else
+        setRow(rows.total, "", nil, nil, nil)
+    end
+
+    rows.finishedCount = finishedCount
+    rows.failedCount = failedCount
     rows.hasSession = batch.hasSession()
     rows.active = batch.isActive()
     rows.failed = state.session ~= nil and state.session:getOutcome() == "failed"
@@ -251,6 +267,46 @@ end
 
 function batch.hasProgress()
     return batch.hasSession()
+end
+
+-- Finished-attempt history for the module UI, rebuilt only when it changes.
+local history = {
+    session = nil,
+    finishedCount = -1,
+    entries = {},
+}
+
+--- Every finished attempt, oldest first: { label, status, igtCs, sessionIgtCs, sessionRtaCs,
+--- sessionLrtCs }. The returned list is replaced, not mutated, when attempts finish.
+function batch.history()
+    local session = state.session
+    local attempts = session and session:getAttempts() or {}
+    local finishedCount = 0
+    for _, attempt in ipairs(attempts) do
+        if attempt.finished then
+            finishedCount = finishedCount + 1
+        end
+    end
+    if session == history.session and finishedCount == history.finishedCount then
+        return history.entries
+    end
+    local entries = {}
+    for _, attempt in ipairs(attempts) do
+        if attempt.finished then
+            entries[#entries + 1] = {
+                label = finishedAttemptLabel(attempt),
+                status = attempt.status,
+                igtCs = attempt.igtCs,
+                sessionIgtCs = attempt.sessionIgtCs,
+                sessionRtaCs = attempt.sessionRtaCs,
+                sessionLrtCs = attempt.sessionLrtCs,
+            }
+        end
+    end
+    history.session = session
+    history.finishedCount = finishedCount
+    history.entries = entries
+    return entries
 end
 
 function batch.session(activeTimer)
