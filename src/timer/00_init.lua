@@ -39,6 +39,7 @@ batch = import('timer/batch.lua', nil, {
 recording = import('timer/recording.lua', nil, {
     splits = splits,
     batch = batch,
+    normalizeRecordingMode = import('data.lua').normalizeRecordingMode,
 })
 runLoop = import('timer/run_loop.lua', nil, {
     singleRun = singleRun,

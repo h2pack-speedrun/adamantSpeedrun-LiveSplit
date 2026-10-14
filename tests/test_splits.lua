@@ -139,3 +139,34 @@ splitsOverlayAdapter.project({
     end,
 }, nil, true)
 assertEqual(projectedSplitTables.splits[2].label, "Erebus")
+
+-- Rendering rows never starts a run; adoptRun explicitly picks up a run already underway.
+local adoptSplits = assert(loadfile("src/timer/splits.lua"))({
+    toCentiseconds = core.toCentiseconds,
+    isRunSuccess = function()
+        return true
+    end,
+})
+adoptSplits.clear(true)
+local underwayRun = {
+    CurrentRoom = { RoomSetName = "G" },
+    EnteredBiomes = 2,
+}
+adoptSplits.updateRows(splitTimer, underwayRun, splitSnapshot)
+assertEqual(adoptSplits.status().kind, "ready")
+assertEqual(adoptSplits.adoptRun(underwayRun), true)
+assertEqual(adoptSplits.status().kind, "active")
+assertEqual(adoptSplits.adoptRun(underwayRun), false)
+
+-- Disarming keeps the recorded result visible.
+adoptSplits.finalizeRun(splitTimer, underwayRun, splitSnapshot)
+adoptSplits.disarm()
+assertEqual(adoptSplits.isStarted(), false)
+assertEqual(adoptSplits.hasDetails(), true)
+assertEqual(adoptSplits.status().kind, "recorded")
+
+local data = support.data
+assertEqual(data.normalizeRecordingMode("multi"), "multi")
+assertEqual(data.normalizeRecordingMode("single"), "single")
+assertEqual(data.normalizeRecordingMode("bogus"), "single")
+assertEqual(data.normalizeRecordingMode(nil), "single")

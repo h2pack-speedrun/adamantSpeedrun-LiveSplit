@@ -1,20 +1,13 @@
 local deps = ...
 local splits = deps.splits
 local batch = deps.batch
+local normalizeRecordingMode = deps.normalizeRecordingMode
 
 local recording = {}
 local currentMode = nil
-local recordingReady = false
-
-local function normalizeMode(mode)
-    if mode == "single" or mode == "multi" then
-        return mode
-    end
-    return "single"
-end
 
 local function readRecordingMode(runtime)
-    return normalizeMode(runtime.data.read("RecordingMode"))
+    return normalizeRecordingMode(runtime.data.read("RecordingMode"))
 end
 
 local function readTargetRuns(runtime)
@@ -22,15 +15,22 @@ local function readTargetRuns(runtime)
 end
 
 local function isRecordingReady(runtime)
-    if runtime == nil then
-        return recordingReady == true
-    end
     return runtime.status.read("RecordingReady") == true
 end
 
 local function setRecordingReady(runtime, value)
-    recordingReady = value == true
-    runtime.status.write("RecordingReady", recordingReady)
+    runtime.status.write("RecordingReady", value == true)
+end
+
+-- Whether batch or split recording is currently armed in memory.
+local function isArmed()
+    return batch.isReady() or splits.isStarted()
+end
+
+-- Ends recording after a finished batch while keeping its result rows visible.
+local function disarm(runtime)
+    setRecordingReady(runtime, false)
+    splits.disarm()
 end
 
 local function clearSingleRecording(keepReady)
@@ -59,16 +59,15 @@ end
 
 function recording.syncSettings(runtime)
     local previousMode = currentMode
-    local previousReady = recordingReady
+    local wasArmed = isArmed()
     local nextMode = readRecordingMode(runtime)
     local nextTargetRuns = readTargetRuns(runtime)
     local nextReady = isRecordingReady(runtime)
 
     currentMode = nextMode
-    recordingReady = nextReady
 
     if not nextReady then
-        if previousReady then
+        if wasArmed then
             stopBatchRecording()
             clearSingleRecording(false)
         end
@@ -139,8 +138,8 @@ function recording.suspend()
     clearSingleRecording(false)
 end
 
-function recording.onRunStarted(run)
-    if isRecordingReady() then
+function recording.onRunStarted(runtime, run)
+    if isRecordingReady(runtime) then
         splits.startRun(run)
     end
     if recording.isMultiRunMode() then
@@ -159,7 +158,7 @@ function recording.onRunFinalized(runtime, timer, run, snapshot)
         batch.finalizeRun(timer, run)
         -- A completed or failed batch disarms recording so its result stays until Start New.
         if not batch.isActive() then
-            setRecordingReady(runtime, false)
+            disarm(runtime)
         end
     else
         splits.finalizeRun(timer, run, snapshot)
@@ -168,7 +167,7 @@ end
 
 function recording.initialize(runtime)
     currentMode = readRecordingMode(runtime)
-    recordingReady = isRecordingReady(runtime)
+    local recordingReady = isRecordingReady(runtime)
 
     if currentMode == "multi" then
         clearSingleRecording(recordingReady)

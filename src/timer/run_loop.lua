@@ -18,6 +18,7 @@ end
 
 local function updateLiveRecordingRows(timer, run, timerSnapshot)
     if timer then
+        splits.adoptRun(run)
         splits.recordCompletedBiomes(timer, run, timerSnapshot)
         splits.updateLiveRows(timer, run, timerSnapshot)
     end
@@ -44,8 +45,8 @@ end
 
 function runLoop.installHooks(hooks)
     singleRun.installHooks(hooks, {
-        onRunStarted = function()
-            recording.onRunStarted(getCurrentRun(), activeTimer(), snapshot())
+        onRunStarted = function(runtime)
+            recording.onRunStarted(runtime, getCurrentRun())
         end,
         onLoadEvent = function(runtime, isLoading)
             recording.onLoadEvent(isLoading)

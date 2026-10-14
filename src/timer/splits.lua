@@ -137,9 +137,6 @@ local function getCurrentBiome(run)
 end
 
 local function getRoute(run)
-    if state.routeType == nil then
-        splits.startRun(run)
-    end
     if state.routeType == "dream" then
         return run and run.BiomeVisitOrder or EMPTY_ROUTE
     end
@@ -222,6 +219,19 @@ function splits.startRun(run)
     state.currentBiome = nil
     clearRows()
     return true
+end
+
+-- Starts capturing a run that was already underway when recording was armed.
+function splits.adoptRun(run)
+    if state.routeType == nil then
+        return splits.startRun(run)
+    end
+    return false
+end
+
+-- Stops arming new runs while keeping the recorded rows and result visible.
+function splits.disarm()
+    state.started = false
 end
 
 function splits.recordCompletedBiomes(timer, run, snapshot)
@@ -332,7 +342,7 @@ function splits.status()
 end
 
 function splits.hasDetails()
-    return state.started and (state.active or state.completed or state.failed)
+    return state.active or state.completed or state.failed
 end
 
 function splits.isStarted()

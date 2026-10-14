@@ -6,6 +6,15 @@ data.batchTargetRuns = {
     max = 10,
 }
 
+data.recordingModes = { "single", "multi" }
+
+function data.normalizeRecordingMode(mode)
+    if mode == "multi" then
+        return "multi"
+    end
+    return "single"
+end
+
 function data.buildStorage()
     return {
         {

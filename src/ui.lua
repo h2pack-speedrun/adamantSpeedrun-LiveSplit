@@ -11,7 +11,7 @@ local TIMER_MODE_OPTIONS = {
     {
         alias = "ShowRTA",
         label = "RTA",
-        tooltip = "Show real attack timer.",
+        tooltip = "Show real-time attack (wall-clock) time.",
     },
     {
         alias = "ShowLrT",
@@ -19,7 +19,6 @@ local TIMER_MODE_OPTIONS = {
         tooltip = "Show real time with map-load time removed.",
     },
 }
-local RECORDING_MODE_VALUES = { "single", "multi" }
 local RECORDING_MODE_LABELS = {
     single = "Single run",
     multi = "Multi-run batch",
@@ -45,7 +44,7 @@ local SHOW_RECORDING_TABLE_OPTS = {
     tooltip = "Show run split as a table while recording.",
 }
 local RECORDING_MODE_OPTS = {
-    values = RECORDING_MODE_VALUES,
+    values = data.recordingModes,
     default = "single",
     displayValues = RECORDING_MODE_LABELS,
     optionsPerLine = 2,
@@ -109,11 +108,11 @@ end
 
 local function readRecordingMode(state)
     local mode = state.read("RecordingMode")
-    if mode == "single" or mode == "multi" then
-        return mode
+    local normalized = data.normalizeRecordingMode(mode)
+    if normalized ~= mode then
+        state.write("RecordingMode", normalized)
     end
-    state.write("RecordingMode", "single")
-    return "single"
+    return normalized
 end
 
 local function withAction(opts, action)

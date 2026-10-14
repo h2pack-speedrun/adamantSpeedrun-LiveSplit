@@ -88,13 +88,14 @@ local recordingBatch = assert(loadfile("src/timer/batch.lua"))({
 local recording = assert(loadfile("src/timer/recording.lua"))({
     splits = recordingSplits,
     batch = recordingBatch,
+    normalizeRecordingMode = support.data.normalizeRecordingMode,
 })
 recording.initialize(recordingRuntime)
 assertEqual(recording.status().kind, "idle")
 recording.start(recordingRuntime)
 assertEqual(recordingCache.RecordingReady, true)
 assertEqual(recording.status().kind, "ready")
-recording.onRunStarted({
+recording.onRunStarted(recordingRuntime, {
     CurrentRoom = { RoomSetName = "F" },
 })
 assertEqual(recording.status().kind, "active")
@@ -114,7 +115,7 @@ assertEqual(recording.status().text, "Recording ready for 2 runs")
 recordingSettings.BatchTargetRuns = 4
 recording.syncSettings(recordingRuntime)
 assertEqual(recording.status().text, "Recording ready for 4 runs")
-recording.onRunStarted({
+recording.onRunStarted(recordingRuntime, {
     CurrentRoom = { RoomSetName = "F" },
 })
 assertEqual(recording.status().kind, "active")
@@ -145,15 +146,15 @@ local function finalizeBatchRun(cleared, igt)
 end
 recordingSettings.BatchTargetRuns = 2
 recording.start(recordingRuntime)
-recording.onRunStarted({ CurrentRoom = { RoomSetName = "F" } })
+recording.onRunStarted(recordingRuntime, { CurrentRoom = { RoomSetName = "F" } })
 finalizeBatchRun(true, 10)
 assertEqual(recordingCache.RecordingReady, true)
-recording.onRunStarted({ CurrentRoom = { RoomSetName = "F" } })
+recording.onRunStarted(recordingRuntime, { CurrentRoom = { RoomSetName = "F" } })
 finalizeBatchRun(true, 12)
 assertEqual(recordingCache.RecordingReady, false)
 assertEqual(recording.status().kind, "recorded")
 assertEqual(recording.status().text, "Recorded 2 / 2")
-recording.onRunStarted({ CurrentRoom = { RoomSetName = "F" } })
+recording.onRunStarted(recordingRuntime, { CurrentRoom = { RoomSetName = "F" } })
 recording.syncSettings(recordingRuntime)
 assertEqual(recording.status().text, "Recorded 2 / 2")
 assertEqual(recordingBatch.session().runs[2].igtCs, 2200)
@@ -162,16 +163,16 @@ assertEqual(recordingCache.RecordingReady, true)
 assertEqual(recording.status().text, "Recording ready for 2 runs")
 
 -- A failed batch disarms the same way.
-recording.onRunStarted({ CurrentRoom = { RoomSetName = "F" } })
+recording.onRunStarted(recordingRuntime, { CurrentRoom = { RoomSetName = "F" } })
 finalizeBatchRun(false, 7)
 assertEqual(recordingCache.RecordingReady, false)
 assertEqual(recording.status().kind, "failed")
-recording.onRunStarted({ CurrentRoom = { RoomSetName = "F" } })
+recording.onRunStarted(recordingRuntime, { CurrentRoom = { RoomSetName = "F" } })
 assertEqual(recording.status().kind, "failed")
 
 -- Suspending for a disabled module drops progress but keeps recording armed.
 recording.start(recordingRuntime)
-recording.onRunStarted({ CurrentRoom = { RoomSetName = "F" } })
+recording.onRunStarted(recordingRuntime, { CurrentRoom = { RoomSetName = "F" } })
 assertEqual(recording.status().kind, "active")
 recording.suspend()
 assertEqual(recordingCache.RecordingReady, true)
@@ -217,6 +218,7 @@ local restoredBatch = assert(loadfile("src/timer/batch.lua"))({
 local restoredRecording = assert(loadfile("src/timer/recording.lua"))({
     splits = restoredSplits,
     batch = restoredBatch,
+    normalizeRecordingMode = support.data.normalizeRecordingMode,
 })
 restoredRecording.initialize(restoredRuntime)
 assertEqual(restoredRecording.status().kind, "ready")
@@ -266,6 +268,7 @@ local bridgeRuntime = {
 bridgeRecording = assert(loadfile("src/timer/recording.lua"))({
     splits = bridgeSplits,
     batch = bridgeBatch,
+    normalizeRecordingMode = support.data.normalizeRecordingMode,
 })
 local runLoop = assert(loadfile("src/timer/run_loop.lua"))({
     singleRun = bridgeSingleRun,
