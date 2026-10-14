@@ -74,13 +74,14 @@ local recordingRuntime = {
     status = newRuntimeState(recordingCache),
 }
 local recordingSplits = assert(loadfile("src/timer/splits.lua"))({
+    routeOf = support.routeOf,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function(run)
         return run and run.Cleared == true
     end,
 })
 local recordingBatch = assert(loadfile("src/timer/batch.lua"))({
-    core = core,
+    newSession = support.newSession,
     isRunSuccess = function(run)
         return run and run.Cleared == true
     end,
@@ -89,6 +90,9 @@ local recording = assert(loadfile("src/timer/recording.lua"))({
     splits = recordingSplits,
     batch = recordingBatch,
     normalizeRecordingMode = support.data.normalizeRecordingMode,
+    newSession = support.newSession,
+    resolveKeys = support.resolveKeys,
+    isRunSuccess = support.isRunSuccess,
 })
 recording.initialize(recordingRuntime)
 assertEqual(recording.status().kind, "idle")
@@ -204,13 +208,14 @@ local restoredRuntime = {
     }),
 }
 local restoredSplits = assert(loadfile("src/timer/splits.lua"))({
+    routeOf = support.routeOf,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function(run)
         return run and run.Cleared == true
     end,
 })
 local restoredBatch = assert(loadfile("src/timer/batch.lua"))({
-    core = core,
+    newSession = support.newSession,
     isRunSuccess = function(run)
         return run and run.Cleared == true
     end,
@@ -219,6 +224,9 @@ local restoredRecording = assert(loadfile("src/timer/recording.lua"))({
     splits = restoredSplits,
     batch = restoredBatch,
     normalizeRecordingMode = support.data.normalizeRecordingMode,
+    newSession = support.newSession,
+    resolveKeys = support.resolveKeys,
+    isRunSuccess = support.isRunSuccess,
 })
 restoredRecording.initialize(restoredRuntime)
 assertEqual(restoredRecording.status().kind, "ready")
@@ -229,13 +237,14 @@ local bridgeSettings = {
     BatchTargetRuns = 2,
 }
 local bridgeSplits = assert(loadfile("src/timer/splits.lua"))({
+    routeOf = support.routeOf,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function(run)
         return run and run.Cleared == true
     end,
 })
 local bridgeBatch = assert(loadfile("src/timer/batch.lua"))({
-    core = core,
+    newSession = support.newSession,
     isRunSuccess = function(run)
         return run and run.Cleared == true
     end,
@@ -269,6 +278,9 @@ bridgeRecording = assert(loadfile("src/timer/recording.lua"))({
     splits = bridgeSplits,
     batch = bridgeBatch,
     normalizeRecordingMode = support.data.normalizeRecordingMode,
+    newSession = support.newSession,
+    resolveKeys = support.resolveKeys,
+    isRunSuccess = support.isRunSuccess,
 })
 local runLoop = assert(loadfile("src/timer/run_loop.lua"))({
     singleRun = bridgeSingleRun,
@@ -345,3 +357,70 @@ assertEqual(bridgeRecording.status().text, "Recording 1 / 2")
 assertEqual(bridgeBatch.session().runs[1].igtCs, 500)
 setTime(0)
 _G.CurrentRun = nil
+
+-- Single-run status comes from a one-run session that starts over once a run counts.
+local singleSettings = {
+    RecordingMode = "single",
+    BatchTargetRuns = 2,
+}
+local singleStatusStore = {}
+local singleRuntime = {
+    data = {
+        read = function(alias)
+            return singleSettings[alias]
+        end,
+    },
+    status = newRuntimeState(singleStatusStore),
+}
+local singleSplits = assert(loadfile("src/timer/splits.lua"))({
+    routeOf = support.routeOf,
+    toCentiseconds = core.toCentiseconds,
+    isRunSuccess = support.isRunSuccess,
+})
+local singleRecording = assert(loadfile("src/timer/recording.lua"))({
+    splits = singleSplits,
+    batch = assert(loadfile("src/timer/batch.lua"))({
+        newSession = support.newSession,
+        isRunSuccess = support.isRunSuccess,
+    }),
+    normalizeRecordingMode = support.data.normalizeRecordingMode,
+    newSession = support.newSession,
+    resolveKeys = support.resolveKeys,
+    isRunSuccess = support.isRunSuccess,
+})
+local singleTimer = {
+    getInGameTime = function()
+        return 5
+    end,
+    getRealTime = function()
+        return 6
+    end,
+    getLoadRemovedTime = function()
+        return 5.5
+    end,
+}
+local underworldRun = { CurrentRoom = { RoomSetName = "F" }, Cleared = true }
+local deathRun = { CurrentRoom = { RoomSetName = "F" }, Cleared = false }
+singleRecording.initialize(singleRuntime)
+assertEqual(singleRecording.status().kind, "idle")
+singleRecording.start(singleRuntime)
+assertEqual(singleRecording.status().text, "Recording ready")
+singleRecording.onRunStarted(singleRuntime, deathRun)
+assertEqual(singleRecording.status().text, "Recording current run")
+singleRecording.onRunFinalized(singleRuntime, singleTimer, deathRun, {})
+assertEqual(singleRecording.status().text, "Recording failed")
+singleRecording.onRunStarted(singleRuntime, underworldRun)
+assertEqual(singleRecording.status().kind, "active")
+singleRecording.onRunFinalized(singleRuntime, singleTimer, underworldRun, {})
+assertEqual(singleRecording.status().text, "Recording complete")
+assertEqual(singleStatusStore.RecordingReady, true)
+singleRecording.onRunStarted(singleRuntime, underworldRun)
+assertEqual(singleRecording.status().kind, "active")
+singleRecording.clear(singleRuntime)
+assertEqual(singleRecording.status().text, "Recording ready")
+
+-- Arming mid-run adopts the run already underway.
+singleRecording.adoptRun({ CurrentRoom = { RoomSetName = "G" }, EnteredBiomes = 2 })
+assertEqual(singleRecording.status().kind, "active")
+singleRecording.stop(singleRuntime)
+assertEqual(singleRecording.status().kind, "idle")

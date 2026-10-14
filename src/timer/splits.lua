@@ -1,6 +1,7 @@
 local deps = ...
 local toCentiseconds = deps.toCentiseconds
 local isRunSuccess = deps.isRunSuccess
+local routeOf = deps.routeOf
 
 local ROUTES = {
     underworld = { "F", "G", "H", "I" },
@@ -83,21 +84,11 @@ local function clearRows()
 end
 
 local function detectRoute(run)
-    if not run then
-        return nil, nil
+    local routeType = routeOf(run)
+    if routeType == "dream" then
+        return routeType, {}
     end
-    if run.IsDreamRun then
-        return "dream", {}
-    end
-
-    local currentRoomSet = run.CurrentRoom and run.CurrentRoom.RoomSetName
-    if currentRoomSet == "N" or currentRoomSet == "O" or currentRoomSet == "P" or currentRoomSet == "Q"
-        or run.BiomesReached and run.BiomesReached.N then
-
-        return "surface", cloneRoute(ROUTES.surface)
-    end
-
-    return "underworld", cloneRoute(ROUTES.underworld)
+    return routeType, routeType and cloneRoute(ROUTES[routeType]) or nil
 end
 
 local function timeCs(value)
@@ -308,37 +299,6 @@ function splits.clear(keepStarted)
     state.currentIndex = nil
     state.currentBiome = nil
     clearRows()
-end
-
-function splits.status()
-    if state.active then
-        return {
-            kind = "active",
-            text = "Recording current run",
-        }
-    end
-    if state.failed then
-        return {
-            kind = "failed",
-            text = "Recording failed",
-        }
-    end
-    if state.completed then
-        return {
-            kind = "recorded",
-            text = "Recording complete",
-        }
-    end
-    if state.started then
-        return {
-            kind = "ready",
-            text = "Recording ready",
-        }
-    end
-    return {
-        kind = "idle",
-        text = "Not recording",
-    }
 end
 
 function splits.hasDetails()

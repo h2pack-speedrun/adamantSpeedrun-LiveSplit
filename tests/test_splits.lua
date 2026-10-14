@@ -22,6 +22,7 @@ local splitSnapshot = {
 }
 
 local timerSplits = assert(loadfile("src/timer/splits.lua"))({
+    routeOf = support.routeOf,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function(run)
         return run and run.Cleared == true
@@ -76,12 +77,13 @@ timerSplits.finalizeRun(splitTimer, {
         F = 65.43,
     },
 }, splitSnapshot)
-assertEqual(timerSplits.status().kind, "recorded")
 assertEqual(timerSplits.hasDetails(), true)
 timerSplits.clear(false)
-assertEqual(timerSplits.status().kind, "idle")
+assertEqual(timerSplits.hasDetails(), false)
+assertEqual(timerSplits.isStarted(), false)
 
 local overlaySplits = assert(loadfile("src/timer/splits.lua"))({
+    routeOf = support.routeOf,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function(run)
         return run and run.Cleared == true
@@ -142,6 +144,7 @@ assertEqual(projectedSplitTables.splits[2].label, "Erebus")
 
 -- Rendering rows never starts a run; adoptRun explicitly picks up a run already underway.
 local adoptSplits = assert(loadfile("src/timer/splits.lua"))({
+    routeOf = support.routeOf,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function()
         return true
@@ -153,9 +156,9 @@ local underwayRun = {
     EnteredBiomes = 2,
 }
 adoptSplits.updateRows(splitTimer, underwayRun, splitSnapshot)
-assertEqual(adoptSplits.status().kind, "ready")
+assertEqual(adoptSplits.hasDetails(), false)
 assertEqual(adoptSplits.adoptRun(underwayRun), true)
-assertEqual(adoptSplits.status().kind, "active")
+assertEqual(adoptSplits.hasDetails(), true)
 assertEqual(adoptSplits.adoptRun(underwayRun), false)
 
 -- Disarming keeps the recorded result visible.
@@ -163,7 +166,6 @@ adoptSplits.finalizeRun(splitTimer, underwayRun, splitSnapshot)
 adoptSplits.disarm()
 assertEqual(adoptSplits.isStarted(), false)
 assertEqual(adoptSplits.hasDetails(), true)
-assertEqual(adoptSplits.status().kind, "recorded")
 
 local data = support.data
 assertEqual(data.normalizeRecordingMode("multi"), "multi")

@@ -81,6 +81,18 @@ support.core = support.withImport(function()
     })
 end)
 
+support.keys = dofile("src/timer/keys.lua")
+support.routeOf = support.keys.routeOf
+support.resolveKeys = support.keys.resolve
+support.Session = assert(loadfile("src/timer/session.lua"))({
+    core = support.core,
+})
+support.newSession = support.Session.new
+
+function support.isRunSuccess(run)
+    return run ~= nil and run.Cleared == true
+end
+
 support.timeFormat = dofile("src/display/time_format.lua")
 
 support.formatCache = assert(loadfile("src/display/format_cache.lua"))({

@@ -18,7 +18,7 @@ end
 
 local function updateLiveRecordingRows(timer, run, timerSnapshot)
     if timer then
-        splits.adoptRun(run)
+        recording.adoptRun(run)
         splits.recordCompletedBiomes(timer, run, timerSnapshot)
         splits.updateLiveRows(timer, run, timerSnapshot)
     end

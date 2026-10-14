@@ -1,13 +1,12 @@
 local support = dofile("tests/support.lua")
 local assertEqual = support.assertEqual
 local setTime = support.setTime
-local core = support.core
 local formatCache = support.formatCache
 local overlay = support.overlay
 local data = support.data
 
 local timerBatch = assert(loadfile("src/timer/batch.lua"))({
-    core = core,
+    newSession = support.newSession,
     isRunSuccess = function(run)
         return run and run.Cleared == true
     end,
@@ -62,7 +61,8 @@ assertEqual(timerBatch.status().kind, "failed")
 assertEqual(timerBatch.status().text, "Failed (0 / 3 complete)")
 assertEqual(timerBatch.session().runs[1].label, "Failed")
 assertEqual(timerBatch.session().runs[1].igtCs, 900)
-assertEqual(timerBatch.time("igt"), 0)
+-- Session IGT sums every attempt, failed ones included.
+assertEqual(timerBatch.time("igt"), 900)
 setTime(0)
 
 timerBatch.start(12)
@@ -72,7 +72,7 @@ assertEqual(timerBatch.session().current.label, "Current 1/12")
 timerBatch.stop()
 
 local overlayBatch = assert(loadfile("src/timer/batch.lua"))({
-    core = core,
+    newSession = support.newSession,
     isRunSuccess = function(run)
         return run and run.Cleared == true
     end,

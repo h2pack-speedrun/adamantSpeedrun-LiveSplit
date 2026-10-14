@@ -1,5 +1,8 @@
+-- Multi-run batch: the advanced category session (any runs, no key rules, a death ends the
+-- batch) projected into the batch overlay rows and status.
+
 local deps = ...
-local core = deps.core
+local newSession = deps.newSession
 local isRunSuccess = deps.isRunSuccess
 
 local batch = {}
@@ -16,55 +19,21 @@ local rows = {
 
 local state = {
     ready = false,
-    active = false,
-    failed = false,
     targetRuns = 0,
-    completedRuns = 0,
-    completedIgt = 0,
-    runRows = {},
-    timer = nil,
-    currentRunActive = false,
+    session = nil,
 }
-local BatchTimer = {}
-
-function BatchTimer:new()
-    local o = {}
-    o.Running = false
-    o.RtaTimer = core.RtaTimer:new()
-    o.LrtTimer = core.LrtTimer:new({ rtaTimer = o.RtaTimer })
-    setmetatable(o, self)
-    self.__index = self
-    return o
-end
-
-function BatchTimer:start()
-    self.Running = true
-    self.RtaTimer:start()
-    self.LrtTimer:start()
-end
-
-function BatchTimer:stop()
-    self.Running = false
-    self.RtaTimer:stop()
-    self.LrtTimer:stop()
-end
-
-function BatchTimer:getRealTime()
-    return self.RtaTimer:getTime()
-end
-
-function BatchTimer:getLoadRemovedTime()
-    return self.LrtTimer:getTime()
-end
-
-function BatchTimer:processLoadEvent(isLoading)
-    if self.Running then
-        self.LrtTimer:processLoadEvent(isLoading)
-    end
-end
 
 local function normalizeTargetRuns(value)
     return math.floor(tonumber(value) or 0)
+end
+
+local function batchSettings(targetRuns)
+    return {
+        runs = targetRuns,
+        distinct = "none",
+        same = "none",
+        onDeath = "reset",
+    }
 end
 
 local function setRow(row, label, igtCs, rtaCs, lrtCs)
@@ -79,8 +48,12 @@ local function getRunLabel(prefix, runIndex)
     return ("%s %d/%d"):format(prefix, runIndex, state.targetRuns)
 end
 
+local function countedRuns()
+    return state.session and state.session:getCountedTotal() or 0
+end
+
 local function getCurrentRunLabel()
-    local runIndex = state.completedRuns + 1
+    local runIndex = countedRuns() + 1
     if state.targetRuns > 0 and runIndex > state.targetRuns then
         runIndex = state.targetRuns
     end
@@ -94,92 +67,44 @@ local function getActiveRunIgt(activeTimer)
     return 0
 end
 
-local function getBatchRta()
-    return state.timer and state.timer:getRealTime() or 0
-end
-
-local function getBatchLrt()
-    return state.timer and state.timer:getLoadRemovedTime() or 0
-end
-
-local function getActiveRunIgtCs(activeTimer)
-    return core.toCentiseconds(getActiveRunIgt(activeTimer))
-end
-
-local function getBatchRtaCs()
-    return core.toCentiseconds(getBatchRta())
-end
-
-local function getBatchLrtCs()
-    return core.toCentiseconds(getBatchLrt())
-end
-
-local function stopTimer()
-    if state.timer and state.timer.Running then
-        state.timer:stop()
+local function finishedAttemptLabel(attempt)
+    if attempt.status == "counted" then
+        return getRunLabel("Run", attempt.countIndex)
     end
-end
-
-local function resetCurrentBatch(clearTimer)
-    state.active = false
-    state.failed = false
-    state.completedRuns = 0
-    state.completedIgt = 0
-    state.runRows = {}
-    state.currentRunActive = false
-    if clearTimer ~= false then
-        stopTimer()
-        state.timer = nil
-    end
-end
-
-local function finishCurrentBatch()
-    state.ready = false
-    state.active = false
-    state.currentRunActive = false
-    stopTimer()
+    return "Failed"
 end
 
 function batch.start(targetRuns)
     state.ready = true
     state.targetRuns = normalizeTargetRuns(targetRuns)
-    resetCurrentBatch(true)
+    state.session = nil
 end
 
 function batch.stop()
     state.ready = false
-    resetCurrentBatch(true)
+    state.session = nil
 end
 
 function batch.clear(targetRuns)
     if targetRuns ~= nil then
         state.targetRuns = normalizeTargetRuns(targetRuns)
     end
-    resetCurrentBatch(true)
+    state.session = nil
 end
 
 function batch.startRun()
     if not state.ready then
         return false
     end
-    if not state.active then
-        resetCurrentBatch(true)
-        state.active = true
+    if state.session == nil then
+        state.session = newSession(batchSettings(state.targetRuns))
     end
-    if not state.timer then
-        state.timer = BatchTimer:new()
-        state.timer:start()
-    end
-    state.currentRunActive = true
+    state.session:startAttempt({})
     return true
 end
 
 function batch.processLoadEvent(isLoading)
-    if state.active and state.timer then
-        state.timer:processLoadEvent(isLoading)
-        return true
-    end
-    return false
+    return state.session ~= nil and state.session:processLoadEvent(isLoading)
 end
 
 function batch.time(mode, activeTimer)
@@ -187,68 +112,52 @@ function batch.time(mode, activeTimer)
         return nil
     end
     if mode == "igt" then
-        local activeIgtCs = state.currentRunActive and getActiveRunIgtCs(activeTimer) or 0
-        return core.toCentiseconds(state.completedIgt) + activeIgtCs
+        return state.session:igtCs(getActiveRunIgt(activeTimer))
     end
     if mode == "rta" then
-        return getBatchRtaCs()
+        return state.session:rtaCs()
     end
     if mode == "lrt" then
-        return getBatchLrtCs()
+        return state.session:lrtCs()
     end
     return nil
 end
 
 function batch.finalizeRun(activeTimer, run)
-    if not state.active then
+    if not batch.isActive() then
         return false
     end
-
-    local runIgt = getActiveRunIgt(activeTimer)
-    if isRunSuccess(run) then
-        state.completedIgt = state.completedIgt + runIgt
-        state.completedRuns = state.completedRuns + 1
-        state.runRows[#state.runRows + 1] = {
-            label = getRunLabel("Run", state.completedRuns),
-            igtCs = core.toCentiseconds(state.completedIgt),
-            rtaCs = getBatchRtaCs(),
-            lrtCs = getBatchLrtCs(),
-        }
-        state.currentRunActive = false
-        if state.completedRuns >= state.targetRuns then
-            finishCurrentBatch()
-        end
-        return true
+    local attempt = state.session:finishAttempt(isRunSuccess(run) == true, getActiveRunIgt(activeTimer))
+    if attempt == nil then
+        return false
     end
-
-    state.failed = true
-    state.currentRunActive = false
-    state.runRows[#state.runRows + 1] = {
-        label = "Failed",
-        igtCs = core.toCentiseconds(state.completedIgt + runIgt),
-        rtaCs = getBatchRtaCs(),
-        lrtCs = getBatchLrtCs(),
-    }
-    finishCurrentBatch()
+    if state.session:getOutcome() ~= nil then
+        state.ready = false
+    end
     return true
 end
 
 function batch.updateRows(activeTimer)
-    local rowCount = math.max(state.targetRuns, #state.runRows)
-    for index = 1, rowCount do
-        rows.runs[index] = rows.runs[index] or { label = "", igtCs = nil, rtaCs = nil, lrtCs = nil }
-        local source = state.runRows[index]
-        if source then
-            setRow(rows.runs[index], source.label, source.igtCs, source.rtaCs, source.lrtCs)
-        else
-            setRow(rows.runs[index], "", nil, nil, nil)
+    local attempts = state.session and state.session:getAttempts() or {}
+    local finishedCount = 0
+    for _, attempt in ipairs(attempts) do
+        if attempt.finished then
+            finishedCount = finishedCount + 1
+            rows.runs[finishedCount] = rows.runs[finishedCount] or { label = "", igtCs = nil, rtaCs = nil, lrtCs = nil }
+            setRow(rows.runs[finishedCount], finishedAttemptLabel(attempt),
+                attempt.sessionIgtCs, attempt.sessionRtaCs, attempt.sessionLrtCs)
         end
+    end
+    local rowCount = math.max(state.targetRuns, finishedCount)
+    for index = finishedCount + 1, rowCount do
+        rows.runs[index] = rows.runs[index] or { label = "", igtCs = nil, rtaCs = nil, lrtCs = nil }
+        setRow(rows.runs[index], "", nil, nil, nil)
     end
     for index = rowCount + 1, #rows.runs do
         setRow(rows.runs[index], "", nil, nil, nil)
     end
 
-    if state.active and state.currentRunActive then
+    if batch.isActive() and state.session:getActiveAttempt() ~= nil then
         setRow(rows.current, getCurrentRunLabel(), nil, nil, nil)
         setRow(rows.currentTime, nil,
             batch.time("igt", activeTimer),
@@ -260,29 +169,30 @@ function batch.updateRows(activeTimer)
     end
 
     rows.hasSession = batch.hasSession()
-    rows.active = state.active == true
-    rows.failed = state.failed == true
+    rows.active = batch.isActive()
+    rows.failed = state.session ~= nil and state.session:getOutcome() == "failed"
     rows.targetRuns = state.targetRuns
-    rows.completedRuns = state.completedRuns
+    rows.completedRuns = countedRuns()
 end
 
 function batch.status()
-    if state.active then
+    local session = state.session
+    if batch.isActive() then
         return {
             kind = "active",
-            text = ("Recording %d / %d"):format(state.completedRuns, state.targetRuns),
+            text = ("Recording %d / %d"):format(countedRuns(), state.targetRuns),
         }
     end
-    if state.failed then
+    if session ~= nil and session:getOutcome() == "failed" then
         return {
             kind = "failed",
-            text = ("Failed (%d / %d complete)"):format(state.completedRuns, state.targetRuns),
+            text = ("Failed (%d / %d complete)"):format(countedRuns(), state.targetRuns),
         }
     end
-    if #state.runRows > 0 then
+    if session ~= nil and session:getLastFinishedAttempt() ~= nil then
         return {
             kind = "recorded",
-            text = ("Recorded %d / %d"):format(state.completedRuns, state.targetRuns),
+            text = ("Recorded %d / %d"):format(countedRuns(), state.targetRuns),
         }
     end
     if state.ready then
@@ -298,7 +208,7 @@ function batch.status()
 end
 
 function batch.isActive()
-    return state.active == true
+    return state.session ~= nil and state.session:isOpen()
 end
 
 function batch.isReady()
@@ -310,11 +220,11 @@ function batch.targetRuns()
 end
 
 function batch.hasSession()
-    return state.timer ~= nil or state.failed == true or state.completedRuns > 0
+    return state.session ~= nil and state.session:hasStarted()
 end
 
 function batch.hasProgress()
-    return state.active == true or state.failed == true or state.completedRuns > 0
+    return batch.hasSession()
 end
 
 function batch.session(activeTimer)

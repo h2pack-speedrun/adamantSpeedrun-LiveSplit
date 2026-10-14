@@ -28,18 +28,28 @@ singleRun = import('timer/single_run/single_run.lua', nil, {
 })
 singleRun.installHooks = import('timer/single_run/hooks.lua', nil, singleRun).installHooks
 
+local keys = import('timer/keys.lua')
+local Session = import('timer/session.lua', nil, {
+    core = core,
+})
+local newSession = Session.new
+
 splits = import('timer/splits.lua', nil, {
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = game.isRunSuccess,
+    routeOf = keys.routeOf,
 })
 batch = import('timer/batch.lua', nil, {
-    core = core,
+    newSession = newSession,
     isRunSuccess = game.isRunSuccess,
 })
 recording = import('timer/recording.lua', nil, {
     splits = splits,
     batch = batch,
     normalizeRecordingMode = import('data.lua').normalizeRecordingMode,
+    newSession = newSession,
+    resolveKeys = keys.resolve,
+    isRunSuccess = game.isRunSuccess,
 })
 runLoop = import('timer/run_loop.lua', nil, {
     singleRun = singleRun,

@@ -111,6 +111,7 @@ slowRun.updateTick()
 assertEqual(slowRun.getSnapshot().rtaCs, 500)
 assertEqual(slowRun.getSnapshot().lrtCs, 200)
 local slowSplits = assert(loadfile("src/timer/splits.lua"))({
+    routeOf = support.routeOf,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function()
         return true

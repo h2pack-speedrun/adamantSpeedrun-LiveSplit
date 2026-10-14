@@ -2,9 +2,22 @@ local deps = ...
 local splits = deps.splits
 local batch = deps.batch
 local normalizeRecordingMode = deps.normalizeRecordingMode
+local newSession = deps.newSession
+local resolveKeys = deps.resolveKeys
+local isRunSuccess = deps.isRunSuccess
 
 local recording = {}
 local currentMode = nil
+
+-- Single-run mode is a one-run category session that starts over once a run counts.
+local SINGLE_RUN_SETTINGS = {
+    runs = 1,
+    distinct = "none",
+    same = "none",
+    onDeath = "continue",
+}
+-- The single-run session while single-run recording is armed; nil when not armed.
+local singleSession = nil
 
 local function readRecordingMode(runtime)
     return normalizeRecordingMode(runtime.data.read("RecordingMode"))
@@ -31,10 +44,36 @@ end
 local function disarm(runtime)
     setRecordingReady(runtime, false)
     splits.disarm()
+    singleSession = nil
 end
 
 local function clearSingleRecording(keepReady)
     splits.clear(keepReady == true)
+    singleSession = keepReady == true and newSession(SINGLE_RUN_SETTINGS) or nil
+end
+
+local function beginSingleAttempt(run)
+    if singleSession == nil or singleSession:getOutcome() ~= nil then
+        singleSession = newSession(SINGLE_RUN_SETTINGS)
+    end
+    singleSession:startAttempt(resolveKeys(run))
+end
+
+local function singleStatus()
+    if singleSession == nil then
+        return { kind = "idle", text = "Not recording" }
+    end
+    if singleSession:getActiveAttempt() ~= nil then
+        return { kind = "active", text = "Recording current run" }
+    end
+    local lastAttempt = singleSession:getLastFinishedAttempt()
+    if lastAttempt ~= nil and lastAttempt.status == "failed" then
+        return { kind = "failed", text = "Recording failed" }
+    end
+    if lastAttempt ~= nil then
+        return { kind = "recorded", text = "Recording complete" }
+    end
+    return { kind = "ready", text = "Recording ready" }
 end
 
 local function clearBatchRecording(targetRuns)
@@ -103,7 +142,7 @@ function recording.status()
     if recording.isMultiRunMode() then
         return batch.status()
     end
-    return splits.status()
+    return singleStatus()
 end
 
 function recording.start(runtime)
@@ -139,11 +178,18 @@ function recording.suspend()
 end
 
 function recording.onRunStarted(runtime, run)
-    if isRecordingReady(runtime) then
-        splits.startRun(run)
+    if isRecordingReady(runtime) and splits.startRun(run) and not recording.isMultiRunMode() then
+        beginSingleAttempt(run)
     end
     if recording.isMultiRunMode() then
         batch.startRun()
+    end
+end
+
+-- Picks up a run that was already underway when recording was armed.
+function recording.adoptRun(run)
+    if splits.adoptRun(run) and not recording.isMultiRunMode() then
+        beginSingleAttempt(run)
     end
 end
 
@@ -160,8 +206,8 @@ function recording.onRunFinalized(runtime, timer, run, snapshot)
         if not batch.isActive() then
             disarm(runtime)
         end
-    else
-        splits.finalizeRun(timer, run, snapshot)
+    elseif splits.finalizeRun(timer, run, snapshot) and singleSession ~= nil then
+        singleSession:finishAttempt(isRunSuccess(run) == true, timer and timer:getInGameTime() or 0)
     end
 end
 
