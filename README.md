@@ -36,7 +36,8 @@ The timer can show these timing columns:
 - Choose which timer columns are visible.
 - Use single-run split mode or multi-run batch recording.
 - Record a batch of 1 to 10 runs and keep cumulative batch totals.
-- **Recording will continue till you stop recording**
+- **Single-run recording continues across runs until you stop it.** A multi-run batch stops when it completes or a run fails, keeping its results until you press Start New.
+- Disabling LiveSplit or the pack clears the current recording but keeps it armed for when you re-enable.
 
 ### Single-Run Recording
 

@@ -136,7 +136,7 @@ function timer.updateTick(runtime)
 end
 
 function timer.cleanup(runtime)
-    local result = runLoop.cleanup(runtime)
+    local result = runLoop.cleanup()
     onChanged(runtime)
     return result
 end

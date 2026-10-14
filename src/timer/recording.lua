@@ -132,6 +132,13 @@ function recording.stop(runtime)
     clearSingleRecording(false)
 end
 
+-- Drops in-progress recording state while the module is disabled but keeps it armed:
+-- RecordingReady is left as-is, so syncSettings re-arms recording when the module is enabled again.
+function recording.suspend()
+    stopBatchRecording()
+    clearSingleRecording(false)
+end
+
 function recording.onRunStarted(run)
     if isRecordingReady() then
         splits.startRun(run)
@@ -147,9 +154,13 @@ function recording.onLoadEvent(isLoading)
     end
 end
 
-function recording.onRunFinalized(timer, run, snapshot)
+function recording.onRunFinalized(runtime, timer, run, snapshot)
     if recording.isMultiRunMode() then
         batch.finalizeRun(timer, run)
+        -- A completed or failed batch disarms recording so its result stays until Start New.
+        if not batch.isActive() then
+            setRecordingReady(runtime, false)
+        end
     else
         splits.finalizeRun(timer, run, snapshot)
     end

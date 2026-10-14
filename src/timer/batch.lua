@@ -134,6 +134,7 @@ local function resetCurrentBatch(clearTimer)
 end
 
 local function finishCurrentBatch()
+    state.ready = false
     state.active = false
     state.currentRunActive = false
     stopTimer()

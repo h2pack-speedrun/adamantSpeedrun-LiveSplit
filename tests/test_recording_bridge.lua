@@ -98,7 +98,7 @@ recording.onRunStarted({
     CurrentRoom = { RoomSetName = "F" },
 })
 assertEqual(recording.status().kind, "active")
-recording.onRunFinalized(splitTimer, {
+recording.onRunFinalized(recordingRuntime, splitTimer, {
     Cleared = true,
     BiomeVisitOrder = { "F" },
     BiomeGameplayTimes = {
@@ -119,7 +119,7 @@ recording.onRunStarted({
 })
 assertEqual(recording.status().kind, "active")
 setTime(20)
-recording.onRunFinalized({
+recording.onRunFinalized(recordingRuntime, {
     getInGameTime = function()
         return 15
     end,
@@ -132,6 +132,61 @@ recording.stop(recordingRuntime)
 assertEqual(recordingCache.RecordingReady, false)
 assertEqual(recording.status().kind, "idle")
 setTime(0)
+
+-- A completed batch disarms recording and keeps its rows through the next run start.
+local function finalizeBatchRun(cleared, igt)
+    recording.onRunFinalized(recordingRuntime, {
+        getInGameTime = function()
+            return igt
+        end,
+    }, {
+        Cleared = cleared,
+    })
+end
+recordingSettings.BatchTargetRuns = 2
+recording.start(recordingRuntime)
+recording.onRunStarted({ CurrentRoom = { RoomSetName = "F" } })
+finalizeBatchRun(true, 10)
+assertEqual(recordingCache.RecordingReady, true)
+recording.onRunStarted({ CurrentRoom = { RoomSetName = "F" } })
+finalizeBatchRun(true, 12)
+assertEqual(recordingCache.RecordingReady, false)
+assertEqual(recording.status().kind, "recorded")
+assertEqual(recording.status().text, "Recorded 2 / 2")
+recording.onRunStarted({ CurrentRoom = { RoomSetName = "F" } })
+recording.syncSettings(recordingRuntime)
+assertEqual(recording.status().text, "Recorded 2 / 2")
+assertEqual(recordingBatch.session().runs[2].igtCs, 2200)
+recording.start(recordingRuntime)
+assertEqual(recordingCache.RecordingReady, true)
+assertEqual(recording.status().text, "Recording ready for 2 runs")
+
+-- A failed batch disarms the same way.
+recording.onRunStarted({ CurrentRoom = { RoomSetName = "F" } })
+finalizeBatchRun(false, 7)
+assertEqual(recordingCache.RecordingReady, false)
+assertEqual(recording.status().kind, "failed")
+recording.onRunStarted({ CurrentRoom = { RoomSetName = "F" } })
+assertEqual(recording.status().kind, "failed")
+
+-- Suspending for a disabled module drops progress but keeps recording armed.
+recording.start(recordingRuntime)
+recording.onRunStarted({ CurrentRoom = { RoomSetName = "F" } })
+assertEqual(recording.status().kind, "active")
+recording.suspend()
+assertEqual(recordingCache.RecordingReady, true)
+assertEqual(recording.status().kind, "idle")
+recording.syncSettings(recordingRuntime)
+assertEqual(recording.status().kind, "ready")
+recording.stop(recordingRuntime)
+recordingSettings.RecordingMode = "single"
+recording.start(recordingRuntime)
+recording.suspend()
+assertEqual(recordingCache.RecordingReady, true)
+recording.syncSettings(recordingRuntime)
+assertEqual(recording.status().kind, "ready")
+recording.stop(recordingRuntime)
+recordingSettings.RecordingMode = "multi"
 
 local restoredSettings = {
     RecordingMode = "multi",

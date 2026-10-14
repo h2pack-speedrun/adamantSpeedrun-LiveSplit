@@ -37,9 +37,9 @@ function runLoop.ensureDisplayLoop()
     return runLoop.hasActiveDisplayLoop()
 end
 
-function runLoop.cleanup(runtime)
+function runLoop.cleanup()
     singleRun.clear()
-    recording.stop(runtime)
+    recording.suspend()
 end
 
 function runLoop.installHooks(hooks)
@@ -51,8 +51,8 @@ function runLoop.installHooks(hooks)
             recording.onLoadEvent(isLoading)
             onChanged(runtime)
         end,
-        onRunFinalized = function()
-            recording.onRunFinalized(activeTimer(), getCurrentRun(), snapshot())
+        onRunFinalized = function(runtime)
+            recording.onRunFinalized(runtime, activeTimer(), getCurrentRun(), snapshot())
         end,
         onDisplayChanged = function(runtime)
             updateLiveRecordingRows(activeTimer(), getCurrentRun(), snapshot())
