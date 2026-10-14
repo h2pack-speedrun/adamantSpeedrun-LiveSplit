@@ -168,10 +168,6 @@ hookAdapter.installHooks({
         hookEvents.startedRun = CurrentRun
         hookEvents.startedTimer = hookSingleRun.getActiveTimer()
     end,
-    onDisplayLoopStarted = function()
-        hookEvents[#hookEvents + 1] = "display"
-        hookEvents.displayTimer = hookSingleRun.getActiveTimer()
-    end,
     onLoadEvent = function(_, isLoading)
         hookEvents[#hookEvents + 1] = isLoading and "loadStart" or "loadStop"
     end,
@@ -203,7 +199,8 @@ assert(hookEvents.startedTimer ~= nil, "expected started timer")
 hookCallbacks.RoomEntranceMaterialize(hookHost, hookRuntime, function()
     return "entered"
 end)
-assertEqual(hookEvents[3], "display")
+assertEqual(hookEvents[3], "changed")
+assertEqual(hookSingleRun.getActiveTimer().Running, true)
 hookCallbacks.AddTimerBlock(hookHost, hookRuntime, function()
     return true
 end, CurrentRun, "MapLoad")

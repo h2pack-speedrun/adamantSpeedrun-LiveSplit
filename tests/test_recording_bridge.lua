@@ -22,6 +22,7 @@ local timerInitRuntimeContext = {
 local timerInit = withImport(function()
     return assert(loadfile("src/timer/00_init.lua"))({
         runtime = timerInitRuntimeContext,
+        onChanged = function() end,
         game = {
             getTime = function()
                 return getFakeTime()
@@ -190,20 +191,9 @@ local bridgeSingleRun = assert(loadfile("src/timer/single_run/single_run.lua"))(
     end,
 })
 bridgeSingleRun.installHooks = assert(loadfile("src/timer/single_run/hooks.lua"))(bridgeSingleRun).installHooks
-local bridgeEvents = {}
-local bridgeEventNames = {
-    currentRunSummaryChanged = "currentRunSummaryChanged",
-    currentRunDetailsChanged = "currentRunDetailsChanged",
-    batchSessionChanged = "batchSessionChanged",
-    recordingStatusChanged = "recordingStatusChanged",
-    currentRunStarted = "currentRunStarted",
-    currentRunFinalized = "currentRunFinalized",
-    currentRunDisplayStarted = "currentRunDisplayStarted",
-    loadRemovalStarted = "loadRemovalStarted",
-    loadRemovalEnded = "loadRemovalEnded",
-}
-local function emitBridgeEvent(name)
-    bridgeEvents[name] = (bridgeEvents[name] or 0) + 1
+local bridgeChanges = 0
+local function onBridgeChanged()
+    bridgeChanges = bridgeChanges + 1
 end
 local bridgeHost = {
     isEnabled = function()
@@ -230,8 +220,7 @@ local runLoop = assert(loadfile("src/timer/run_loop.lua"))({
     getCurrentRun = function()
         return CurrentRun
     end,
-    emit = emitBridgeEvent,
-    events = bridgeEventNames,
+    onChanged = onBridgeChanged,
 })
 local bridgeHooks = {}
 runLoop.installHooks({
@@ -269,9 +258,7 @@ bridgeHooks.RecordRunStats(bridgeHost, bridgeRuntime, function()
     return true
 end)
 assertEqual(bridgeRecording.status().kind, "recorded")
-assert((bridgeEvents.currentRunStarted or 0) > 0, "expected currentRunStarted event")
-assert((bridgeEvents.currentRunSummaryChanged or 0) > 0, "expected currentRunSummaryChanged event")
-assert((bridgeEvents.currentRunDetailsChanged or 0) > 0, "expected currentRunDetailsChanged event")
+assert(bridgeChanges > 0, "expected timer changes to be reported")
 
 bridgeSettings.RecordingMode = "multi"
 bridgeRecording.syncSettings(bridgeRuntime)

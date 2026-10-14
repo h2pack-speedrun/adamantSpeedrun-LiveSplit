@@ -6,11 +6,6 @@ local function isEnabled(callbacks, host)
     return callbacks.isEnabled(host) == true
 end
 
-local function emitDisplayStarted(callbacks, runtime)
-    callbacks.onDisplayLoopStarted(runtime)
-    callbacks.onDisplayChanged(runtime)
-end
-
 function hooksAdapter.installHooks(hooks, callbacks)
     hooks.wrap("StartNewRun", function(host, runtime, baseFunc, prevRun, args)
         if not isEnabled(callbacks, host) then
@@ -31,7 +26,7 @@ function hooksAdapter.installHooks(hooks, callbacks)
 
         local value = baseFunc(...)
         if singleRun.startDisplayLoop() then
-            emitDisplayStarted(callbacks, runtime)
+            callbacks.onDisplayChanged(runtime)
         end
         return value
     end)
@@ -43,7 +38,7 @@ function hooksAdapter.installHooks(hooks, callbacks)
 
         local value = baseFunc(...)
         if singleRun.startDisplayLoop() then
-            emitDisplayStarted(callbacks, runtime)
+            callbacks.onDisplayChanged(runtime)
         end
         return value
     end)
@@ -72,7 +67,7 @@ function hooksAdapter.installHooks(hooks, callbacks)
     end)
 
     hooks.wrap("RemoveTimerBlock", function(host, runtime, baseFunc, currRun, timerBlockName, ...)
-        -- Pass native arguments through; AddTimerBlock's args select the MapState scope.
+        -- Pass native arguments through; RemoveTimerBlock's args select the MapState scope.
         local value = baseFunc(currRun, timerBlockName, ...)
         if isEnabled(callbacks, host) and timerBlockName == "MapLoad" and singleRun.processLoadEvent(false) then
             callbacks.onLoadEvent(runtime, false)

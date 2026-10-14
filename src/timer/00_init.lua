@@ -5,9 +5,8 @@ local timer = {
     batch = {},
     recording = {},
 }
-timer.events = import('timer/events.lua', nil, {
-    source = timer,
-})
+-- Called whenever timer or recording output may have changed.
+local onChanged = deps.onChanged
 
 local defaultGame = {
     getTime = GetTime,
@@ -59,8 +58,7 @@ runLoop = import('timer/run_loop.lua', nil, {
     splits = splits,
     batch = batch,
     getCurrentRun = game.getCurrentRun,
-    emit = timer.events.emit,
-    events = timer.events.names,
+    onChanged = onChanged,
 })
 
 function timer.currentRun.summary()
@@ -105,31 +103,31 @@ end
 
 function timer.recording.start(runtime)
     local result = recording.start(runtime)
-    timer.events.emitRecordingStarted(runtime, recording.isMultiRunMode())
+    onChanged(runtime)
     return result
 end
 
 function timer.recording.stop(runtime)
     local result = recording.stop(runtime)
-    timer.events.emitRecordingOutputsChanged(runtime)
+    onChanged(runtime)
     return result
 end
 
 function timer.recording.clear(runtime)
     local result = recording.clear(runtime)
-    timer.events.emitRecordingOutputsChanged(runtime)
+    onChanged(runtime)
     return result
 end
 
 function timer.recording.syncSettings(runtime)
     local result = recording.syncSettings(runtime)
-    timer.events.emitRecordingOutputsChanged(runtime)
+    onChanged(runtime)
     return result
 end
 
 function timer.initialize(runtime)
     recording.initialize(runtime)
-    timer.events.emitRecordingOutputsChanged(runtime)
+    onChanged(runtime)
 end
 
 function timer.installHooks(hooks)
@@ -146,13 +144,13 @@ end
 
 function timer.updateTick(runtime)
     local updated = runLoop.updateTick()
-    timer.events.emitTick(runtime, recording.isMultiRunMode())
+    onChanged(runtime)
     return updated
 end
 
 function timer.cleanup(runtime)
     local result = runLoop.cleanup(runtime)
-    timer.events.emitCleanup(runtime)
+    onChanged(runtime)
     return result
 end
 

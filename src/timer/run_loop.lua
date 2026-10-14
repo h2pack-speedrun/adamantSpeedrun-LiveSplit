@@ -4,8 +4,7 @@ local recording = deps.recording
 local splits = deps.splits
 local batch = deps.batch
 local getCurrentRun = deps.getCurrentRun
-local emit = deps.emit or function() end
-local eventNames = deps.events
+local onChanged = deps.onChanged
 
 local runLoop = {}
 
@@ -52,35 +51,19 @@ function runLoop.installHooks(hooks)
         isEnabled = function(host)
             return host.isEnabled() == true
         end,
-        onRunStarted = function(runtime)
+        onRunStarted = function()
             recording.onRunStarted(getCurrentRun(), activeTimer(), snapshot())
-            emit(eventNames.currentRunStarted, runtime)
-            emit(eventNames.currentRunSummaryChanged, runtime)
-            emit(eventNames.currentRunDetailsChanged, runtime)
-            emit(eventNames.batchSessionChanged, runtime)
-        end,
-        onDisplayLoopStarted = function(runtime)
-            emit(eventNames.currentRunDisplayStarted, runtime)
-            emit(eventNames.currentRunSummaryChanged, runtime)
         end,
         onLoadEvent = function(runtime, isLoading)
             recording.onLoadEvent(isLoading)
-            emit(isLoading and eventNames.loadRemovalStarted or eventNames.loadRemovalEnded, runtime)
-            emit(eventNames.currentRunSummaryChanged, runtime)
-            emit(eventNames.batchSessionChanged, runtime)
+            onChanged(runtime)
         end,
-        onRunFinalized = function(runtime)
+        onRunFinalized = function()
             recording.onRunFinalized(activeTimer(), getCurrentRun(), snapshot())
-            emit(eventNames.currentRunFinalized, runtime)
-            emit(eventNames.currentRunSummaryChanged, runtime)
-            emit(eventNames.currentRunDetailsChanged, runtime)
-            emit(eventNames.batchSessionChanged, runtime)
-            emit(eventNames.recordingStatusChanged, runtime)
         end,
         onDisplayChanged = function(runtime)
             updateLiveRecordingRows(activeTimer(), getCurrentRun(), snapshot())
-            emit(eventNames.currentRunSummaryChanged, runtime)
-            emit(eventNames.currentRunDetailsChanged, runtime)
+            onChanged(runtime)
         end,
     })
 end

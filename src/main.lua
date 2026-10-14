@@ -36,7 +36,15 @@ local function init()
 
     module.data.define(data.buildStorage())
     module.status.define(data.buildStatus())
-    local timer = import("timer/00_init.lua")
+    local sharedSnapshot
+    local timer = import("timer/00_init.lua", nil, {
+        onChanged = function(runtime)
+            sharedSnapshot.publish(runtime.shared)
+        end,
+    })
+    sharedSnapshot = import("shared_snapshot.lua", nil, {
+        timer = timer,
+    })
     local controller = import("controller.lua", nil, {
         timer = timer,
     })
@@ -45,14 +53,10 @@ local function init()
         overlayEvents = controller.overlayEvents,
         fonts = module.overlays.fonts,
     })
-    local sharedSnapshot = import("shared_snapshot.lua", nil, {
-        timer = timer,
-    })
     local ui = import("ui.lua")
 
     actions.attach(module, controller)
     sharedSnapshot.register(module.shared)
-    sharedSnapshot.attach(timer)
     timer.installHooks(module.hooks)
     display.registerOverlays(module.overlays)
     ui.attach(module, {
