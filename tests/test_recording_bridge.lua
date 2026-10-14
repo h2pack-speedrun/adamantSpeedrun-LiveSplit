@@ -118,7 +118,6 @@ recording.onRunStarted({
 })
 assertEqual(recording.status().kind, "active")
 setTime(20)
-recordingBatch.updateTimer()
 recording.onRunFinalized({
     getInGameTime = function()
         return 15

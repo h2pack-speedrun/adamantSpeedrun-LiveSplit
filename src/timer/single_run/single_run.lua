@@ -27,10 +27,6 @@ function LiveRunTimer:stop()
     self.LrtTimer:stop()
 end
 
-function LiveRunTimer:update()
-    self.RtaTimer:update()
-end
-
 function LiveRunTimer:getRealTime()
     return self.RtaTimer:getTime()
 end
@@ -99,9 +95,6 @@ function singleRun.startDisplayLoop()
 end
 
 function singleRun.updateTick()
-    if activeTimer and activeTimer.Running then
-        activeTimer:update()
-    end
     updateSnapshot()
     return activeTimer
 end

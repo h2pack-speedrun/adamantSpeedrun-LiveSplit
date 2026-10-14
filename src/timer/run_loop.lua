@@ -26,7 +26,6 @@ end
 
 function runLoop.updateTick()
     local timer = singleRun.updateTick()
-    batch.updateTimer()
     updateLiveRecordingRows(timer, getCurrentRun(), snapshot())
     return true
 end

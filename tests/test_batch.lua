@@ -20,7 +20,6 @@ assertEqual(timerBatch.startRun(), true)
 assertEqual(timerBatch.status().kind, "active")
 assertEqual(timerBatch.currentRow().label, "Current 1/2")
 setTime(100)
-timerBatch.updateTimer()
 timerBatch.finalizeRun({
     getInGameTime = function()
         return 80
@@ -36,7 +35,6 @@ assertEqual(timerBatch.currentRow().label, "")
 assertEqual(timerBatch.startRun(), true)
 assertEqual(timerBatch.currentRow().label, "Current 2/2")
 setTime(190)
-timerBatch.updateTimer()
 timerBatch.finalizeRun({
     getInGameTime = function()
         return 70
@@ -53,7 +51,6 @@ assertEqual(timerBatch.currentRow().label, "")
 timerBatch.start(3)
 assertEqual(timerBatch.startRun(), true)
 setTime(12)
-timerBatch.updateTimer()
 timerBatch.finalizeRun({
     getInGameTime = function()
         return 9
@@ -121,7 +118,6 @@ local batchSession = overlayBatch.session({
 })
 assertEqual(batchSession.currentTime.igtCs, 700)
 setTime(10)
-overlayBatch.updateTimer()
 overlayBatch.finalizeRun({
     getInGameTime = function()
         return 8

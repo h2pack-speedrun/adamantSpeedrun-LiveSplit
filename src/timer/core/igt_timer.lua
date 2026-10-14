@@ -1,4 +1,4 @@
--- In-Game Time timer. Thin wrapper around the engine's _worldTime global.
+-- In-Game Time timer. Polls the game's CurrentRun.GameplayTime.
 
 local deps = ...
 local getCurrentRun = deps and deps.getCurrentRun or nil

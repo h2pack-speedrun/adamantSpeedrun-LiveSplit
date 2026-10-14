@@ -49,13 +49,6 @@ function BatchTimer:stop()
     self.LrtTimer:stop()
 end
 
-function BatchTimer:update()
-    if not self.Running then
-        return
-    end
-    self.RtaTimer:update()
-end
-
 function BatchTimer:getRealTime()
     return self.RtaTimer:getTime()
 end
@@ -178,12 +171,6 @@ function batch.startRun()
     end
     state.currentRunActive = true
     return true
-end
-
-function batch.updateTimer()
-    if state.active and state.timer then
-        state.timer:update()
-    end
 end
 
 function batch.processLoadEvent(isLoading)
