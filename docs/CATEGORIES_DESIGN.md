@@ -150,10 +150,9 @@ so paging needs no Lib change.
 - **Follow newest**: by default the overlay shows the newest page. Paging back holds that page
   until the next attempt ends, then returns to newest. Paging next past the last page also returns
   to newest.
-- **Hotkeys** follow Quick Pause: a `string` setting per key chosen from `F5`-`F12` or None
-  (F1 opens the Hell2Modding overlay), resolved through `rom.ImGuiKey` and polled with
-  `ImGui.IsKeyPressed` in an always-draw tick. Two settings: `PagePrevKey` and `PageNextKey`.
-  Defaults avoid Quick Pause's F9. The tick installs once and stays correct across hot reload.
+- **Hotkeys** are requested from ModpackLib's hotkeys capability (`module.hotkeys.request`,
+  ids `PagePrev`/`PageNext`, storage aliases `PagePrevKey`/`PageNextKey`, defaults F7/F8).
+  Lib owns bindings, conflicts and dispatch; LiveSplit only pages.
 - The module's ImGui tab shows the full attempt log in a scrollable list with no row cap.
 
 ## UI
@@ -186,5 +185,5 @@ are added as new fields, so existing readers keep working.
    each attempt's biome splits with session-cumulative times, shows the current region live in the
    session table, and hides the separate single-run splits table. A run whose distinct key cannot
    be read is invalid. Session rules are saved with the session so a resumed session keeps them.
-5. **Optional.** Move hotkey polling into Lib as a shared capability with cross-module conflict
-   detection.
+5. **Done in ModpackLib.** Hotkeys are a Lib capability with cross-module conflict resolution;
+   LiveSplit's page keys use it.

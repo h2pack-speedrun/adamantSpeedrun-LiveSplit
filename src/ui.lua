@@ -78,20 +78,6 @@ local PAGE_SIZE_OPTS = {
     max = data.pageSize.max,
     default = data.pageSize.default,
 }
-local PAGE_PREV_KEY_OPTS = {
-    label = "Previous page key",
-    tooltip = "Shows older finished runs in the overlay. Returns to the newest page when a run finishes.",
-    values = data.hotkeyValues,
-    displayValues = data.hotkeyDisplayValues,
-    controlWidth = 140,
-}
-local PAGE_NEXT_KEY_OPTS = {
-    label = "Next page key",
-    tooltip = "Shows newer finished runs; past the last page the overlay follows the newest runs again.",
-    values = data.hotkeyValues,
-    displayValues = data.hotkeyDisplayValues,
-    controlWidth = 140,
-}
 local HISTORY_HEIGHT = 180
 local HISTORY_STATUS_COLORS = {
     counted = { 0.80, 0.82, 0.88, 1.0 },
@@ -276,12 +262,12 @@ local function drawDisplaySection(draw, state, includeColumns)
     end
 end
 
-local function drawPagingSection(draw, state)
+local function drawPagingSection(draw, state, hotkeys)
     drawSection(draw, "Multi-Run Overlay Pages",
         "The overlay shows one page of finished runs; the keys page through older ones.")
     draw.widgets.stepper(state.get("PageSize"), PAGE_SIZE_OPTS)
-    draw.widgets.dropdown(state.get("PagePrevKey"), PAGE_PREV_KEY_OPTS)
-    draw.widgets.dropdown(state.get("PageNextKey"), PAGE_NEXT_KEY_OPTS)
+    draw.widgets.hotkey(hotkeys.get(data.pageKeys.previous.id))
+    draw.widgets.hotkey(hotkeys.get(data.pageKeys.next.id))
 end
 
 -- Formatted history lines, cached by the history list they were built from.
@@ -331,13 +317,13 @@ local function drawHistorySection(draw, statusView)
     end
 end
 
-function module.drawTab(draw, state, actions, statusView)
+function module.drawTab(draw, state, actions, statusView, hotkeys)
     local showRecordingTable = readBool(state, "ShowRecordingTable", true)
     local showRawTimers = readBool(state, "ShowRawTimers", false)
     drawRecordingSection(draw, state, actions, statusView, showRecordingTable, showRawTimers)
     drawDisplaySection(draw, state, true)
     if readRecordingMode(state) == "multi" then
-        drawPagingSection(draw, state)
+        drawPagingSection(draw, state, hotkeys)
         drawHistorySection(draw, statusView)
     end
 end
@@ -351,7 +337,7 @@ end
 
 function module.attach(libModule, statusView)
     libModule.ui.tab(function(_, ui)
-        return module.drawTab(ui.draw, ui.data, ui.actions, statusView)
+        return module.drawTab(ui.draw, ui.data, ui.actions, statusView, ui.hotkeys)
     end)
     libModule.ui.quickContent(function(_, ui)
         return module.drawQuickContent(ui.draw, ui.data, ui.actions, statusView)

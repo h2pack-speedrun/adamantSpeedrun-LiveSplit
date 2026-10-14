@@ -56,6 +56,7 @@ local function init()
     local ui = import("ui.lua")
     local pageHotkeys = import("display/page_hotkeys.lua", nil, {
         paging = display.paging,
+        pageKeys = data.pageKeys,
         isPagingActive = function()
             return timer.recording.isMultiRunMode() and timer.batch.hasSession()
         end,
@@ -70,11 +71,8 @@ local function init()
         getSessionHistory = timer.batch.history,
     })
     module.onCommit(controller.onCommit)
-    module.onActivate(function(host, runtime)
-        controller.onActivate(host, runtime)
-        pageHotkeys.setLive(host, runtime)
-    end)
-    pageHotkeys.install()
+    module.onActivate(controller.onActivate)
+    pageHotkeys.attach(module)
 
     module.fallbackUi.attachGuiOnce(function(fallbackUi)
         rom.gui.add_imgui(fallbackUi.renderWindow)

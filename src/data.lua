@@ -15,11 +15,12 @@ data.pageSize = {
     max = 10,
 }
 
--- Page hotkeys follow Quick Pause: F1 opens the Hell2Modding overlay, and Quick Pause defaults
--- to F9, so LiveSplit defaults to F7 and F8.
-data.HOTKEY_NONE = ""
-data.hotkeyValues = { data.HOTKEY_NONE, "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12" }
-data.hotkeyDisplayValues = { [data.HOTKEY_NONE] = "None" }
+-- Page keys are Lib-managed hotkeys (module.hotkeys). Their bindings keep the PagePrevKey and
+-- PageNextKey storage aliases so saved keys carry over.
+data.pageKeys = {
+    previous = { id = "PagePrev", alias = "PagePrevKey", default = "F7" },
+    next = { id = "PageNext", alias = "PageNextKey", default = "F8" },
+}
 
 function data.normalizeRecordingMode(mode)
     if mode == "multi" then
@@ -93,20 +94,6 @@ function data.buildStorage()
             default = data.pageSize.default,
             min = data.pageSize.min,
             max = data.pageSize.max,
-            hash = false,
-        },
-        {
-            type = "string",
-            alias = "PagePrevKey",
-            default = "F7",
-            maxLen = 8,
-            hash = false,
-        },
-        {
-            type = "string",
-            alias = "PageNextKey",
-            default = "F8",
-            maxLen = 8,
             hash = false,
         },
         {

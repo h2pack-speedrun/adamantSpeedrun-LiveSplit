@@ -94,74 +94,39 @@ assertEqual(type(projectedTables.batch), "table")
 assertEqual(type(projectedTables.splits), "table")
 assertEqual(refreshOwnedCount, 1)
 
--- Page hotkeys: one always-draw registration across reloads; keys page only while active and the
--- Hell2Modding overlay is closed.
-local drawCallbacks = {}
-local pressed = {}
-local guiOpen = false
-local previousRom = _G.rom
-_G.rom = {
-    ImGuiKey = { F7 = "key-f7", F8 = "key-f8" },
-    ImGui = {
-        IsKeyPressed = function(key)
-            return pressed[key] == true
-        end,
-    },
-    gui = {
-        add_always_draw_imgui = function(callback)
-            drawCallbacks[#drawCallbacks + 1] = callback
-        end,
-        is_open = function()
-            return guiOpen
-        end,
-    },
-}
+-- Page keys are requested from Lib with their old storage aliases; presses page only while active.
+local requests = {}
 local pageCalls = {}
 local pagingActive = true
-local function loadHotkeys()
-    return assert(loadfile("src/display/page_hotkeys.lua"))({
-        paging = {
-            previous = function()
-                pageCalls[#pageCalls + 1] = "previous"
-            end,
-            next = function()
-                pageCalls[#pageCalls + 1] = "next"
-            end,
-        },
-        isPagingActive = function()
-            return pagingActive
+local pageHotkeys = assert(loadfile("src/display/page_hotkeys.lua"))({
+    paging = {
+        previous = function()
+            pageCalls[#pageCalls + 1] = "previous"
         end,
-    })
-end
-local hotkeys = loadHotkeys()
-hotkeys.install()
-local hotkeyRuntime = {
-    data = {
-        read = function(alias)
-            return ({ PagePrevKey = "F7", PageNextKey = "F8" })[alias]
+        next = function()
+            pageCalls[#pageCalls + 1] = "next"
         end,
     },
-}
-hotkeys.setLive({ isEnabled = function() return true end }, hotkeyRuntime)
-pressed["key-f7"] = true
-drawCallbacks[1]()
+    pageKeys = support.data.pageKeys,
+    isPagingActive = function()
+        return pagingActive
+    end,
+})
+pageHotkeys.attach({
+    hotkeys = {
+        request = function(id, opts)
+            requests[id] = opts
+        end,
+    },
+})
+assertEqual(requests.PagePrev.alias, "PagePrevKey")
+assertEqual(requests.PagePrev.default, "F7")
+assertEqual(requests.PageNext.alias, "PageNextKey")
+assertEqual(requests.PageNext.default, "F8")
+requests.PagePrev.onPress()
+requests.PageNext.onPress()
 assertEqual(pageCalls[1], "previous")
-guiOpen = true
-drawCallbacks[1]()
-assertEqual(#pageCalls, 1)
-guiOpen = false
-pagingActive = false
-drawCallbacks[1]()
-assertEqual(#pageCalls, 1)
-pagingActive = true
--- A reload replaces the tick without registering a second callback.
-local reloaded = loadHotkeys()
-reloaded.install()
-assertEqual(#drawCallbacks, 1)
-reloaded.setLive({ isEnabled = function() return true end }, hotkeyRuntime)
-pressed["key-f7"] = false
-pressed["key-f8"] = true
-drawCallbacks[1]()
 assertEqual(pageCalls[2], "next")
-_G.rom = previousRom
-AdamantLiveSplit_PageHotkeys = nil
+pagingActive = false
+requests.PagePrev.onPress()
+assertEqual(#pageCalls, 2)
