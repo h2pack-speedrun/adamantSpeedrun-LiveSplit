@@ -1,4 +1,4 @@
-local deps = ... or {}
+local deps = ...
 local timer = deps.timer
 local controller = {}
 
@@ -22,9 +22,11 @@ end
 
 controller.overlayEvents = {
     onCommit = function(host, runtime, ctx, overlayDisplay)
+        -- A ticked display only needs the live rows refreshed; otherwise rebuild every row.
         local liveOnly = false
         if host.isEnabled() and timer.hasActiveDisplayLoop() then
-            liveOnly = timer.updateTick(runtime) == true
+            timer.updateTick(runtime)
+            liveOnly = true
         end
         overlayDisplay.project(ctx, {
             runtime = runtime,
@@ -40,10 +42,10 @@ controller.overlayEvents = {
             })
             return false
         end
-        local liveOnly = timer.updateTick(runtime) == true
+        timer.updateTick(runtime)
         overlayDisplay.project(ctx, {
             runtime = runtime,
-            liveOnly = liveOnly,
+            liveOnly = true,
         })
     end,
     whenActive = function(host)

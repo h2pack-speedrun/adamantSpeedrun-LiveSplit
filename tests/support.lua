@@ -55,9 +55,13 @@ function support.newRuntimeState(backing)
     }
 end
 
-function support.withImport(callback)
+-- Runs callback with a test `import`; `overrides` maps import paths to stand-in modules.
+function support.withImport(callback, overrides)
     local previousImport = _G.import
     _G.import = function(path, _, deps)
+        if overrides and overrides[path] ~= nil then
+            return overrides[path]
+        end
         return assert(loadfile("src/" .. path))(deps)
     end
     local ok, result = pcall(callback)
@@ -92,5 +96,15 @@ support.overlay = support.withImport(function()
         fonts = support.fonts,
     })
 end)
+
+-- Recomputes split rows and returns biome row `index`, or nil when that row is empty.
+function support.splitRow(splits, index, timer, run, snapshot)
+    splits.updateRows(timer, run, snapshot)
+    local row = splits.details().biomes[index]
+    if row.label == "" then
+        return nil
+    end
+    return row
+end
 
 return support

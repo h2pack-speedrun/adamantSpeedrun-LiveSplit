@@ -1,12 +1,5 @@
-local deps = ... or {}
-local getTime = deps.getTime or GetTime
-
-if getTime == nil then
-    local socket = require('socket')
-    getTime = function(_)
-        return socket.gettime()
-    end
-end
+local deps = ...
+local getTime = deps.getTime
 
 local RtaTimer = import('timer/core/rta_timer.lua', nil, {
     getTime = getTime,

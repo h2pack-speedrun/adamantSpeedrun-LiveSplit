@@ -1,4 +1,4 @@
-local deps = ... or {}
+local deps = ...
 local core = deps.core
 local isRunSuccess = deps.isRunSuccess
 
@@ -316,26 +316,9 @@ function batch.hasProgress()
     return state.active == true or state.failed == true or state.completedRuns > 0
 end
 
-function batch.row(index)
-    batch.updateRows()
-    return rows.runs[index]
-end
-
-function batch.currentRow()
-    batch.updateRows()
-    return rows.current
-end
-
-function batch.rows()
-    batch.updateRows()
-    return rows
-end
-
 function batch.session(activeTimer)
     batch.updateRows(activeTimer)
     return rows
 end
-
-batch.BatchTimer = BatchTimer
 
 return batch

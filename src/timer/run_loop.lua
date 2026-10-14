@@ -1,4 +1,4 @@
-local deps = ... or {}
+local deps = ...
 local singleRun = deps.singleRun
 local recording = deps.recording
 local splits = deps.splits
@@ -26,7 +26,6 @@ end
 function runLoop.updateTick()
     local timer = singleRun.updateTick()
     updateLiveRecordingRows(timer, getCurrentRun(), snapshot())
-    return true
 end
 
 function runLoop.hasActiveDisplayLoop()
@@ -34,10 +33,7 @@ function runLoop.hasActiveDisplayLoop()
 end
 
 function runLoop.ensureDisplayLoop()
-    if singleRun.startDisplayLoop() then
-        return runLoop.hasActiveDisplayLoop()
-    end
-
+    singleRun.startDisplayLoop()
     return runLoop.hasActiveDisplayLoop()
 end
 
@@ -48,9 +44,6 @@ end
 
 function runLoop.installHooks(hooks)
     singleRun.installHooks(hooks, {
-        isEnabled = function(host)
-            return host.isEnabled() == true
-        end,
         onRunStarted = function()
             recording.onRunStarted(getCurrentRun(), activeTimer(), snapshot())
         end,

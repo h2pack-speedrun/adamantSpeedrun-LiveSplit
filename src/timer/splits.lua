@@ -1,4 +1,4 @@
-local deps = ... or {}
+local deps = ...
 local toCentiseconds = deps.toCentiseconds
 local isRunSuccess = deps.isRunSuccess
 
@@ -339,31 +339,8 @@ function splits.isStarted()
     return state.started == true
 end
 
-function splits.rows()
-    return rows
-end
-
 function splits.details()
     return rows
-end
-
-function splits.row(index, timer, run, snapshot)
-    local route = getRoute(run)
-    local row = rows.biomes[index]
-    if not row then
-        return nil
-    end
-
-    updateBiomeRow(row, index, timer, run, route, snapshot)
-    if row.label == "" then
-        return nil
-    end
-    return row
-end
-
-function splits.totalRow(timer, snapshot)
-    setSnapshotRow(rows.total, "Total", snapshot, timer)
-    return rows.total
 end
 
 return splits

@@ -1,4 +1,4 @@
-local deps = ... or {}
+local deps = ...
 local timer = deps.timer
 local formatCache = deps.formatCache
 

@@ -1,7 +1,7 @@
 -- Load-Removed Time timer. LRT = RealTime - LoadTime.
 
 local deps = ...
-local getTime = deps and deps.getTime or GetTime
+local getTime = deps.getTime
 
 local LrtTimer = {}
 
@@ -10,7 +10,6 @@ function LrtTimer:new(args)
     local o = {
         Running = false,
         Loading = false,
-        WasReset = false,
         LoadStartSystemTime = nil,
         LoadTime = 0,
         RealTimer = args.rtaTimer,
@@ -24,7 +23,6 @@ function LrtTimer:init()
     self.Loading = false
     self.LoadStartSystemTime = nil
     self.LoadTime = 0
-    self.WasReset = false
 end
 
 function LrtTimer:start()
@@ -62,14 +60,6 @@ function LrtTimer:processLoadEvent(isLoading)
     else
         self:stopLoad()
     end
-end
-
-function LrtTimer:reset()
-    self.Running = false
-    self.Loading = false
-    self.LoadStartSystemTime = nil
-    self.LoadTime = 0
-    self.WasReset = true
 end
 
 function LrtTimer:getLoadTime()

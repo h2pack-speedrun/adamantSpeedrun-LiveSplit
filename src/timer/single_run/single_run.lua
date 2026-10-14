@@ -1,4 +1,4 @@
-local deps = ... or {}
+local deps = ...
 local core = deps.core
 local isMultiRunMode = deps.isMultiRunMode
 
@@ -129,7 +129,5 @@ end
 function singleRun.getSnapshot()
     return snapshot
 end
-
-singleRun.LiveRunTimer = LiveRunTimer
 
 return singleRun

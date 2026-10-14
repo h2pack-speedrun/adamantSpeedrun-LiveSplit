@@ -2,13 +2,9 @@ local singleRun = ...
 
 local hooksAdapter = {}
 
-local function isEnabled(callbacks, host)
-    return callbacks.isEnabled(host) == true
-end
-
 function hooksAdapter.installHooks(hooks, callbacks)
     hooks.wrap("StartNewRun", function(host, runtime, baseFunc, prevRun, args)
-        if not isEnabled(callbacks, host) then
+        if not host.isEnabled() then
             return baseFunc(prevRun, args)
         end
 
@@ -20,7 +16,7 @@ function hooksAdapter.installHooks(hooks, callbacks)
     end)
 
     hooks.wrap("RoomEntranceMaterialize", function(host, runtime, baseFunc, ...)
-        if not isEnabled(callbacks, host) then
+        if not host.isEnabled() then
             return baseFunc(...)
         end
 
@@ -32,7 +28,7 @@ function hooksAdapter.installHooks(hooks, callbacks)
     end)
 
     hooks.wrap("RoomEntranceDreamBiomeStart", function(host, runtime, baseFunc, ...)
-        if not isEnabled(callbacks, host) then
+        if not host.isEnabled() then
             return baseFunc(...)
         end
 
@@ -44,7 +40,7 @@ function hooksAdapter.installHooks(hooks, callbacks)
     end)
 
     hooks.wrap("RecordRunStats", function(host, runtime, baseFunc, ...)
-        if not isEnabled(callbacks, host) then
+        if not host.isEnabled() then
             return baseFunc(...)
         end
 
@@ -60,7 +56,7 @@ function hooksAdapter.installHooks(hooks, callbacks)
     hooks.wrap("AddTimerBlock", function(host, runtime, baseFunc, currRun, timerBlockName, ...)
         -- Pass native arguments through; AddTimerBlock's args select the MapState scope.
         local value = baseFunc(currRun, timerBlockName, ...)
-        if isEnabled(callbacks, host) and timerBlockName == "MapLoad" and singleRun.processLoadEvent(true) then
+        if host.isEnabled() and timerBlockName == "MapLoad" and singleRun.processLoadEvent(true) then
             callbacks.onLoadEvent(runtime, true)
         end
         return value
@@ -69,7 +65,7 @@ function hooksAdapter.installHooks(hooks, callbacks)
     hooks.wrap("RemoveTimerBlock", function(host, runtime, baseFunc, currRun, timerBlockName, ...)
         -- Pass native arguments through; RemoveTimerBlock's args select the MapState scope.
         local value = baseFunc(currRun, timerBlockName, ...)
-        if isEnabled(callbacks, host) and timerBlockName == "MapLoad" and singleRun.processLoadEvent(false) then
+        if host.isEnabled() and timerBlockName == "MapLoad" and singleRun.processLoadEvent(false) then
             callbacks.onLoadEvent(runtime, false)
         end
         return value

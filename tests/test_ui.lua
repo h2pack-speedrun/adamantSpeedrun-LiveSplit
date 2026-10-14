@@ -5,9 +5,9 @@ local uiStatus = {
     kind = "idle",
     text = "Not recording",
 }
-local uiModule = assert(loadfile("src/ui.lua"))({
-    data = support.data,
-})
+local uiModule = support.withImport(function()
+    return assert(loadfile("src/ui.lua"))()
+end)
 local uiStatusView = {
     getRecordingStatus = function()
         return uiStatus

@@ -1,19 +1,17 @@
-local deps = ... or {}
+local deps = ...
 local timer = deps.timer
-local data = deps.data or import("data.lua")
-local overlay = deps.overlay or import('display/overlay_rows.lua', nil, {
+local data = import("data.lua")
+local overlay = import('display/overlay_rows.lua', nil, {
     fonts = deps.fonts,
 })
 local overlayEvents = deps.overlayEvents
-local timeFormat = deps.timeFormat or import('display/time_format.lua')
-local formatCentiseconds = deps.formatCentiseconds or timeFormat.formatCentiseconds
-local formatCache = deps.formatCache or import('display/format_cache.lua', nil, {
-    formatCentiseconds = formatCentiseconds,
+local formatCache = import('display/format_cache.lua', nil, {
+    formatCentiseconds = import('display/time_format.lua').formatCentiseconds,
 })
-local settings = deps.settings or import('display/settings.lua', nil, {
+local settings = import('display/settings.lua', nil, {
     timer = timer,
 })
-local projection = deps.projection or import('display/projection.lua', nil, {
+local projection = import('display/projection.lua', nil, {
     timer = timer,
     formatCache = formatCache,
 })

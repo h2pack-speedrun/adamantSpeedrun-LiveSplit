@@ -1,5 +1,4 @@
-local deps = ... or {}
-local data = deps.data or import("data.lua")
+local data = import("data.lua")
 
 local module = {}
 

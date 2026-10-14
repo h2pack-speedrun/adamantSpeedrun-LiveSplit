@@ -50,11 +50,8 @@ assertEqual(borrowedLrt:getTime(), 10)
 rtaTime = 15
 assertEqual(borrowedLrt:getTime(), 13)
 borrowedLrt:stop()
-borrowedLrt:reset()
 assertEqual(lrtBorrowedCalls.start, 0)
 assertEqual(lrtBorrowedCalls.stop, 0)
-assertEqual(lrtBorrowedCalls.reset, 0)
-assertEqual(borrowedLrt:getLoadTime(), 0)
 
 local singleRun = assert(loadfile("src/timer/single_run/single_run.lua"))({
     core = core,
@@ -128,7 +125,7 @@ local slowSplitRun = {
     BiomeGameplayTimes = { F = 1.5 },
 }
 slowSplits.recordCompletedBiomes(slowRun.getActiveTimer(), slowSplitRun, slowRun.getSnapshot())
-local slowSplitRow = slowSplits.row(1, slowRun.getActiveTimer(), slowSplitRun, slowRun.getSnapshot())
+local slowSplitRow = support.splitRow(slowSplits, 1, slowRun.getActiveTimer(), slowSplitRun, slowRun.getSnapshot())
 assertEqual(slowSplitRow.rtaCs, 500)
 assertEqual(slowSplitRow.lrtCs, 200)
 setClocks(6, 1)

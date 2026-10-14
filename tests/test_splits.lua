@@ -35,11 +35,11 @@ timerSplits.updateRows(splitTimer, {
     CurrentRoom = { RoomSetName = "F" },
     EnteredBiomes = 1,
 }, splitSnapshot)
-assertEqual(timerSplits.row(1, splitTimer, {
+assertEqual(support.splitRow(timerSplits, 1, splitTimer, {
     CurrentRoom = { RoomSetName = "F" },
     EnteredBiomes = 1,
 }, splitSnapshot).label, "Erebus")
-assertEqual(timerSplits.row(1, splitTimer, {
+assertEqual(support.splitRow(timerSplits, 1, splitTimer, {
     CurrentRoom = { RoomSetName = "F" },
     EnteredBiomes = 1,
 }, splitSnapshot).igtCs, 1234)
@@ -50,7 +50,7 @@ timerSplits.updateRows(splitTimer, {
     CurrentRoom = { RoomSetName = "N" },
     EnteredBiomes = 1,
 }, splitSnapshot)
-assertEqual(timerSplits.row(1, splitTimer, {
+assertEqual(support.splitRow(timerSplits, 1, splitTimer, {
     CurrentRoom = { RoomSetName = "N" },
     EnteredBiomes = 1,
 }, splitSnapshot).label, "Ephyra")
@@ -63,7 +63,7 @@ timerSplits.recordCompletedBiomes(splitTimer, {
         F = 65.43,
     },
 }, splitSnapshot)
-local completedSplitRow = timerSplits.row(1, splitTimer, {
+local completedSplitRow = support.splitRow(timerSplits, 1, splitTimer, {
     CurrentRoom = { RoomSetName = "G" },
     EnteredBiomes = 2,
 }, splitSnapshot)

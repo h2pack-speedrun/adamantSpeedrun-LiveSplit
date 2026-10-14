@@ -1,4 +1,4 @@
-local deps = ... or {}
+local deps = ...
 local formatCentiseconds = deps.formatCentiseconds
 
 local formatCache = {}

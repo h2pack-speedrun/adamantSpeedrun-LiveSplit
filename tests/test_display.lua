@@ -7,6 +7,35 @@ local projectedLines = {}
 local projectedTables = {}
 local refreshOwnedCount = 0
 
+local settingsFake = {
+    isTimerDisplayVisible = function()
+        return true
+    end,
+    isModeVisible = function(mode)
+        return mode ~= "rta"
+    end,
+    isBatchVisible = function()
+        return false
+    end,
+    isRecordingTableVisible = function()
+        return false
+    end,
+}
+local projectionFake = {
+    begin = function()
+        beginCount = beginCount + 1
+    end,
+    displayTime = function(row, mode)
+        row.time = mode .. "-time"
+    end,
+    batchSession = function()
+        return {
+            runs = {},
+            current = {},
+        }
+    end,
+}
+
 withImport(function()
     local display = assert(loadfile("src/display/display.lua"))({
         fonts = support.fonts,
@@ -34,36 +63,6 @@ withImport(function()
                 end,
             },
         },
-        data = support.data,
-        overlay = support.overlay,
-        settings = {
-            isTimerDisplayVisible = function()
-                return true
-            end,
-            isModeVisible = function(mode)
-                return mode ~= "rta"
-            end,
-            isBatchVisible = function()
-                return false
-            end,
-            isRecordingTableVisible = function()
-                return false
-            end,
-        },
-        projection = {
-            begin = function()
-                beginCount = beginCount + 1
-            end,
-            displayTime = function(row, mode)
-                row.time = mode .. "-time"
-            end,
-            batchSession = function()
-                return {
-                    runs = {},
-                    current = {},
-                }
-            end,
-        },
     })
 
     display.project({
@@ -79,7 +78,10 @@ withImport(function()
     }, {
         runtime = {},
     })
-end)
+end, {
+    ["display/settings.lua"] = settingsFake,
+    ["display/projection.lua"] = projectionFake,
+})
 
 assertEqual(beginCount, 1)
 assertEqual(projectedLines["summary.igt"].time, "igt-time")

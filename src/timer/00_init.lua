@@ -1,4 +1,4 @@
-local deps = ... or {}
+local deps = ...
 
 local timer = {
     currentRun = {},
@@ -8,21 +8,9 @@ local timer = {
 -- Called whenever timer or recording output may have changed.
 local onChanged = deps.onChanged
 
-local defaultGame = {
-    getTime = GetTime,
-    getCurrentRun = function()
-        return rom and rom.game and rom.game.CurrentRun or CurrentRun
-    end,
-    isRunSuccess = function(run)
-        if type(WasRunSuccess) == "function" and run and run.RunResult ~= nil then
-            return WasRunSuccess(run) == true
-        end
-        return run and run.Cleared == true
-    end,
-}
-local game = deps.game or defaultGame
+local game = import('timer/game.lua')
 
-local core = deps.core or import('timer/core/00_init.lua', nil, {
+local core = import('timer/core/00_init.lua', nil, {
     getTime = game.getTime,
     getCurrentRun = game.getCurrentRun,
 })
@@ -143,9 +131,8 @@ function timer.ensureDisplayLoop()
 end
 
 function timer.updateTick(runtime)
-    local updated = runLoop.updateTick()
+    runLoop.updateTick()
     onChanged(runtime)
-    return updated
 end
 
 function timer.cleanup(runtime)

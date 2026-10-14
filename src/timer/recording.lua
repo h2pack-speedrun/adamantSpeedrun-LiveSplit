@@ -1,4 +1,4 @@
-local deps = ... or {}
+local deps = ...
 local splits = deps.splits
 local batch = deps.batch
 
@@ -53,10 +53,6 @@ function recording.getMode()
     return currentMode or "single"
 end
 
-function recording.isSingleRunMode()
-    return recording.getMode() == "single"
-end
-
 function recording.isMultiRunMode()
     return recording.getMode() == "multi"
 end
@@ -103,8 +99,6 @@ function recording.syncSettings(runtime)
         clearSingleRecording(true)
     end
 end
-
-recording.syncMode = recording.syncSettings
 
 function recording.status()
     if recording.isMultiRunMode() then

@@ -1,4 +1,4 @@
-local deps = ... or {}
+local deps = ...
 local batch = deps.batch
 local overlay = deps.overlay
 local isVisible = deps.isVisible
@@ -70,7 +70,7 @@ function batchOverlay.buildRows(runtime)
         return projectionRows
     end
 
-    local rows = batch.session and batch.session() or batch.rows()
+    local rows = batch.session()
     for index = 1, maxBatchRunRows do
         appendProjectionRow(rows.runs[index], projectionRunRows[index], runtime)
     end

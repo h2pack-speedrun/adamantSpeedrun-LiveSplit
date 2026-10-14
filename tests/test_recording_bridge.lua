@@ -21,16 +21,16 @@ local timerInitRuntimeContext = {
 }
 local timerInit = withImport(function()
     return assert(loadfile("src/timer/00_init.lua"))({
-        runtime = timerInitRuntimeContext,
         onChanged = function() end,
-        game = {
-            getTime = function()
-                return getFakeTime()
-            end,
-            getCurrentRun = currentRun,
-        },
     })
-end)
+end, {
+    ["timer/game.lua"] = {
+        getTime = function()
+            return getFakeTime()
+        end,
+        getCurrentRun = currentRun,
+    },
+})
 local timerInitDisplay = withImport(function()
     return assert(loadfile("src/display/display.lua"))({
         fonts = support.fonts,
@@ -127,7 +127,7 @@ recording.onRunFinalized({
     Cleared = true,
 })
 assertEqual(recording.status().text, "Recording 1 / 4")
-assertEqual(recordingBatch.row(1).igtCs, 1500)
+assertEqual(recordingBatch.session().runs[1].igtCs, 1500)
 recording.stop(recordingRuntime)
 assertEqual(recordingCache.RecordingReady, false)
 assertEqual(recording.status().kind, "idle")
@@ -252,7 +252,8 @@ end)
 setTime(7)
 _G.CurrentRun.GameplayTime = 6
 runLoop.updateTick()
-local bridgeSplitRow = bridgeSplits.row(1, bridgeSingleRun.getActiveTimer(), CurrentRun, bridgeSingleRun.getSnapshot())
+local bridgeSplitRow = support.splitRow(bridgeSplits, 1, bridgeSingleRun.getActiveTimer(), CurrentRun,
+    bridgeSingleRun.getSnapshot())
 assertEqual(bridgeSplitRow.igtCs, 600)
 bridgeHooks.RecordRunStats(bridgeHost, bridgeRuntime, function()
     return true
@@ -283,6 +284,6 @@ bridgeHooks.RecordRunStats(bridgeHost, bridgeRuntime, function()
     return true
 end)
 assertEqual(bridgeRecording.status().text, "Recording 1 / 2")
-assertEqual(bridgeBatch.row(1).igtCs, 500)
+assertEqual(bridgeBatch.session().runs[1].igtCs, 500)
 setTime(0)
 _G.CurrentRun = nil
