@@ -85,6 +85,8 @@ local loaded, loadedRules = store.load(status)
 assertEqual(loadedRules.runs, 3)
 assertEqual(loadedRules.category, "custom")
 assertEqual(loadedRules.onDeath, "reset")
+assertEqual(loadedRules.allowed, nil)
+assertEqual(loadedRules.completedRun, "summary")
 assertEqual(loaded.state, "open")
 assertEqual(loaded.rtaCs, 100)
 assertEqual(#loaded.attempts, 1)
@@ -93,8 +95,30 @@ assertEqual(loaded.attempts[1].route, "surface")
 assertEqual(loaded.attempts[1].weapon, nil)
 assertEqual(loaded.attempts[1].runOrdinal, 0)
 assertEqual(loaded.attempts[1].countIndex, 1)
+-- Pause rows keep their duration, and a session saved while paused says so.
+storeRecord.paused = true
+storeRecord.attempts[2] = { status = "paused", pausedCs = 4200, sessionRtaCs = 100 }
+store.saveAttempt(status, storeRecord, 2)
+store.saveTotals(status, storeRecord, support.batchSettings(3))
+local pausedLoad = store.load(status)
+assertEqual(pausedLoad.paused, true)
+assertEqual(pausedLoad.attempts[2].status, "paused")
+assertEqual(pausedLoad.attempts[2].pausedCs, 4200)
+assertEqual(pausedLoad.attempts[1].pausedCs, nil)
+
+-- A Custom session limited to some regions, keeping biome splits, resumes with those rules.
+local regionRules = support.batchSettings(2)
+regionRules.distinct = "route"
+regionRules.allowed = { underworld = true, surface = true }
+regionRules.completedRun = "splits"
+store.saveTotals(status, storeRecord, regionRules)
+local _, savedRegionRules = store.load(status)
+assertEqual(backing.SessionAllowed, "surface,underworld")
+assertEqual(savedRegionRules.completedRun, "splits")
+assertEqual(support.categories.sameRules(regionRules, support.categories.settingsFromSaved(savedRegionRules)), true)
 store.clear(status)
 assertEqual(store.load(status), nil)
+assertEqual(backing.SessionAllowed, "")
 assertEqual(#backing.SessionAttempts, 0)
 
 -- Recording across a simulated restart. `persisted` plays the role of the module config file.

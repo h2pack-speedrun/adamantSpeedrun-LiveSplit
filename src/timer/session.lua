@@ -17,7 +17,8 @@ Session.__index = Session
 ---@field onDeath string "continue" logs the failure; "reset" ends the session as failed.
 ---@field allowed table<string, boolean>? Permitted values of the `distinct` key; others are invalid.
 
---- Attempt statuses: "active", "counted", "failed", "duplicate", "invalid".
+--- Attempt statuses: "active", "counted", "failed", "duplicate", "invalid", and "paused" for a
+--- pause between attempts (its `pausedCs` is how long the session clocks were stopped).
 ---@param settings LiveSplitSessionSettings
 function Session.new(settings)
     local rta = core.RtaTimer:new()
@@ -28,6 +29,9 @@ function Session.new(settings)
         countedTotal = 0,
         referenceKeys = nil,
         activeAttempt = nil,
+        -- The pause row while paused, and the wall clock measuring it.
+        pauseRow = nil,
+        pauseClock = nil,
         outcome = nil,
         started = false,
         igtSeconds = 0,
@@ -94,13 +98,79 @@ local function breaksDistinctRule(self, attemptKeys)
     return self.settings.allowed ~= nil and self.settings.allowed[value] ~= true
 end
 
+-- Pauses ----------------------------------------------------------------------------------------
+
+function Session:isPaused()
+    return self.pauseRow ~= nil
+end
+
+--- A pause is allowed between attempts of an open, running session.
+function Session:canPause()
+    return self:isOpen() and self.activeAttempt == nil and not self.suspended and self.pauseRow == nil
+end
+
+local function enterPause(self, row)
+    self.rta:stop()
+    self.lrt:stop()
+    self.pauseRow = row
+    self.pauseClock = core.RtaTimer:new()
+    self.pauseClock:start((row.pausedCs or 0) / 100)
+end
+
+--- Stops the session clocks between attempts and returns the pause row. A pause right after
+--- another, with no attempt between them, continues that row. Returns nil when not allowed.
+function Session:pause()
+    if not self:canPause() then
+        return nil
+    end
+    local row = self.attempts[#self.attempts]
+    if row == nil or row.status ~= "paused" then
+        row = {
+            index = #self.attempts + 1,
+            keys = {},
+            status = "paused",
+            finished = true,
+            pausedCs = 0,
+        }
+        self.attempts[row.index] = row
+    end
+    row.sessionIgtCs = core.toCentiseconds(self.igtSeconds)
+    row.sessionRtaCs = self:rtaCs()
+    row.sessionLrtCs = self:lrtCs()
+    enterPause(self, row)
+    return row
+end
+
+--- Ends the pause, restarting the session clocks. Returns the pause row, or nil when not paused.
+function Session:unpause()
+    local row = self.pauseRow
+    if row == nil then
+        return nil
+    end
+    row.pausedCs = core.toCentiseconds(self.pauseClock:getTime())
+    self.pauseRow = nil
+    self.pauseClock = nil
+    self.rta:start(self.rta:getTime())
+    self.lrt:start(self.lrt:getLoadTime())
+    return row
+end
+
+--- How long `row` has been paused, live for the pause in progress.
+function Session:pausedCs(row)
+    if row == self.pauseRow then
+        return core.toCentiseconds(self.pauseClock:getTime())
+    end
+    return row.pausedCs or 0
+end
+
 --- Starts an attempt for the run with game ordinal `runOrdinal`. A still-unfinished attempt is
---- dropped first, as the previous run was abandoned without being finalized. Returns nil when the
---- session has ended.
+--- dropped first, as the previous run was abandoned without being finalized; a pause ends. Returns
+--- nil when the session has ended.
 function Session:startAttempt(attemptKeys, runOrdinal)
     if self.outcome ~= nil then
         return nil
     end
+    self:unpause()
     if self.activeAttempt ~= nil then
         table.remove(self.attempts)
         self.activeAttempt = nil
@@ -221,6 +291,14 @@ function Session:resume()
         return
     end
     self.suspended = false
+    -- A session saved while paused comes back paused; time with the game closed is not counted.
+    local last = self.attempts[#self.attempts]
+    if self.resumePaused and self.outcome == nil and last ~= nil and last.status == "paused" then
+        self.resumePaused = nil
+        enterPause(self, last)
+        return
+    end
+    self.resumePaused = nil
     if self.outcome == nil then
         self.rta:start(self.rta:getTime())
         self.lrt:start(self.lrt:getLoadTime())
@@ -239,6 +317,7 @@ function Session:toRecord()
             sessionRtaCs = attempt.sessionRtaCs,
             sessionLrtCs = attempt.sessionLrtCs,
             countIndex = attempt.countIndex,
+            pausedCs = attempt.status == "paused" and self:pausedCs(attempt) or nil,
             biomes = attempt.biomes,
         }
         for _, keyName in ipairs(KEY_NAMES) do
@@ -248,6 +327,7 @@ function Session:toRecord()
     end
     return {
         state = self.outcome or (self.started and "open" or "new"),
+        paused = self.pauseRow ~= nil,
         rtaCs = self:rtaCs(),
         loadCs = core.toCentiseconds(self.lrt:getLoadTime()),
         igtCs = core.toCentiseconds(self.igtSeconds),
@@ -279,10 +359,11 @@ function Session.restore(settings, record)
             sessionRtaCs = row.sessionRtaCs,
             sessionLrtCs = row.sessionLrtCs,
             countIndex = row.countIndex,
+            pausedCs = row.pausedCs,
             biomes = row.biomes or {},
         }
         session.attempts[index] = attempt
-        if attempt.status ~= "invalid" and session.referenceKeys == nil then
+        if attempt.status ~= "invalid" and attempt.status ~= "paused" and session.referenceKeys == nil then
             session.referenceKeys = attemptKeys
         end
         if attempt.status == "counted" then
@@ -301,6 +382,7 @@ function Session.restore(settings, record)
     elseif record.state == "open" then
         session.started = true
         session.suspended = true
+        session.resumePaused = record.paused == true
     end
     return session
 end

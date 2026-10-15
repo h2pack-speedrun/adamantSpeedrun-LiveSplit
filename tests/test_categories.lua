@@ -57,11 +57,102 @@ assertEqual(custom.distinct, "weapon")
 assertEqual(custom.same, "none")
 assertEqual(custom.onDeath, "continue")
 assertEqual(custom.label, "weapon")
+-- Presets always resume after a restart; Custom follows its setting.
+assertEqual(allRegions.resumeAfterRestart, true)
+assertEqual(custom.resumeAfterRestart, false)
+customData.ResumeAfterRestart = true
+assertEqual(categories.settingsFor("custom", {
+    read = function(alias)
+        return customData[alias]
+    end,
+}).resumeAfterRestart, true)
 assertEqual(categories.normalize("single"), "custom")
 assertEqual(categories.normalize("nonsense"), "custom")
 assertEqual(categories.sameRules(custom, categories.settingsFromSaved(custom)), true)
 assertEqual(categories.sameRules(custom, allRegions), false)
 assertEqual(categories.settingsFromSaved({ category = "allWeapons" }).runs, 6)
+
+-- Custom can express every preset: allowed regions (for a new region) and kept biome splits.
+local regionData = {
+    BatchTargetRuns = 2,
+    CustomDistinct = "route",
+    CustomSame = "aspect",
+    CustomOnDeath = "continue",
+    CustomAllowUnderworld = true,
+    CustomAllowSurface = true,
+    CustomAllowDream = false,
+    CustomKeepSplits = true,
+    ResumeAfterRestart = true,
+}
+local regionReader = {
+    read = function(alias)
+        return regionData[alias]
+    end,
+}
+local customRegions = categories.settingsFor("custom", regionReader)
+assertEqual(customRegions.allowed.underworld, true)
+assertEqual(customRegions.allowed.dream, nil)
+assertEqual(customRegions.completedRun, "splits")
+assertEqual(categories.allowedText(customRegions.allowed), "Underworld or Surface")
+local savedRegions = categories.settingsFromSaved(customRegions)
+assertEqual(categories.sameRules(customRegions, savedRegions), true)
+assertEqual(savedRegions.completedRun, "splits")
+-- Every region allowed is the same as no limit; regions only apply to a new region.
+regionData.CustomAllowDream = true
+assertEqual(categories.settingsFor("custom", regionReader).allowed, nil)
+regionData.CustomAllowDream = false
+regionData.CustomDistinct = "weapon"
+assertEqual(categories.settingsFor("custom", regionReader).allowed, nil)
+-- Custom rules stay finishable: "same" must be compatible with "new", and runs are capped by
+-- how many values the distinct key has.
+assertEqual(categories.compatibleSame("weapon", "weapon"), false)
+assertEqual(categories.compatibleSame("weapon", "aspect"), false)
+assertEqual(categories.compatibleSame("aspect", "weapon"), true)
+assertEqual(categories.compatibleSame("route", "aspect"), true)
+assertEqual(categories.compatibleSame("none", "route"), true)
+assertEqual(categories.maxRuns("route", "none", { underworld = true, surface = true }), 2)
+assertEqual(categories.maxRuns("route", "none", nil), 3)
+assertEqual(categories.maxRuns("weapon", "none"), 6)
+assertEqual(categories.maxRuns("aspect", "weapon"), 4)
+assertEqual(categories.maxRuns("aspect", "none"), 24)
+assertEqual(categories.maxRuns("none", "none"), nil)
+-- The key counts match timer/keys.lua.
+assertEqual(#keys.WEAPONS, categories.WEAPON_COUNT)
+assertEqual(aspectCount, categories.ASPECT_COUNT)
+for _, weapon in ipairs(keys.WEAPONS) do
+    assertEqual(#keys.ASPECTS[weapon], categories.ASPECTS_PER_WEAPON)
+end
+local impossibleData = {
+    BatchTargetRuns = 40,
+    CustomDistinct = "weapon",
+    CustomSame = "aspect",
+}
+local impossible = categories.settingsFor("custom", {
+    read = function(alias)
+        return impossibleData[alias]
+    end,
+})
+assertEqual(impossible.same, "none")
+assertEqual(impossible.runs, 6)
+local savedImpossible = { category = "custom", distinct = "aspect", same = "aspect", runs = 30 }
+assertEqual(categories.settingsFromSaved(savedImpossible).runs, 24)
+
+-- Copying a preset into Custom reproduces its rules.
+local copied = {}
+categories.copyToCustom("allRegions", {
+    write = function(alias, value)
+        copied[alias] = value
+    end,
+})
+local copiedRules = categories.settingsFor("custom", {
+    read = function(alias)
+        return copied[alias]
+    end,
+})
+copiedRules.category = "allRegions"
+assertEqual(categories.sameRules(copiedRules, allRegions), true)
+assertEqual(categories.summary(allRegions),
+    "2 runs, each a new region (Underworld or Surface), same aspect, deaths logged, biome splits kept")
 
 -- All Weapons: labels come from weapons; deaths and repeats are logged without ending the session.
 local function heroRun(weapon, aspect, roomSet, cleared)
@@ -232,17 +323,29 @@ local uiValues = {
     RecordingMode = "multi",
     Category = "single",
     CategoryVersion = 0,
+    BatchTargetRuns = 3,
+    CustomDistinct = "none",
+    CustomSame = "none",
+    CustomOnDeath = "reset",
 }
 local texts = {}
 local uiDraw = {
-    imgui = { SameLine = function() end, Spacing = function() end },
+    imgui = {
+        SameLine = function() end,
+        Spacing = function() end,
+        GetCursorPosX = function() return 0 end,
+        SetCursorPosX = function() end,
+        AlignTextToFramePadding = function() end,
+        CalcTextSize = function(text) return #text * 7, 14 end,
+        IsItemHovered = function() return false end,
+    },
     widgets = {
         text = function(text)
             texts[#texts + 1] = text
         end,
         separator = function() end,
         checkbox = function() return false end,
-        stepper = function() return false end,
+        slider = function() return false end,
         dropdown = function() return false end,
         button = function(_, opts)
             opts.action:stage(opts.value)
@@ -288,8 +391,8 @@ uiModule.drawQuickContent(uiDraw, uiState, uiActions, uiView)
 assertEqual(uiValues.RecordingMode, "multi")
 local sawRules = false
 for _, text in ipairs(texts) do
-    if text == categories.RULES_TEXT.allRegions then
+    if text == categories.summary(categories.settingsFor("allRegions")) then
         sawRules = true
     end
 end
-assert(sawRules, "expected the All Regions rules line")
+assert(sawRules, "expected the All Regions rules summary under the status")

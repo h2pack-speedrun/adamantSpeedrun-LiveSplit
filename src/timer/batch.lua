@@ -81,7 +81,12 @@ local STATUS_SUFFIX = {
     invalid = " (invalid)",
 }
 
+local PAUSED_LABEL = "Paused"
+
 local function finishedAttemptLabel(attempt)
+    if attempt.status == "paused" then
+        return PAUSED_LABEL
+    end
     if state.settings.label == "index" then
         if attempt.status == "counted" then
             return ("Run %d/%d"):format(attempt.countIndex, targetRuns())
@@ -252,9 +257,15 @@ function batch.updateRows(activeTimer, run)
             finishedCount = finishedCount + 1
             local group = rows.groups[finishedCount] or newGroup()
             rows.groups[finishedCount] = group
-            setRow(group.heading, finishedAttemptLabel(attempt),
-                attempt.sessionIgtCs, attempt.sessionRtaCs, attempt.sessionLrtCs)
-            if splits then
+            if attempt.status == "paused" then
+                -- A pause shows how long the session clocks were stopped; no in-game time passed.
+                local pausedCs = state.session:pausedCs(attempt)
+                setRow(group.heading, PAUSED_LABEL, nil, pausedCs, pausedCs)
+            else
+                setRow(group.heading, finishedAttemptLabel(attempt),
+                    attempt.sessionIgtCs, attempt.sessionRtaCs, attempt.sessionLrtCs)
+            end
+            if splits and attempt.status ~= "paused" then
                 setBiomeRows(group, attempt)
             else
                 group.biomeCount = 0
@@ -282,7 +293,7 @@ function batch.updateRows(activeTimer, run)
     end
 
     if batch.hasSession() then
-        setRow(rows.total, "Total", batch.time("igt", activeTimer), batch.time("rta"), batch.time("lrt"))
+        setRow(rows.total, "Session", batch.time("igt", activeTimer), batch.time("rta"), batch.time("lrt"))
     else
         setRow(rows.total, "", nil, nil, nil)
     end
@@ -301,8 +312,11 @@ end
 function batch.status()
     local session = state.session
     local progress = ("%d / %d"):format(countedRuns(), targetRuns())
+    if session ~= nil and session:isPaused() then
+        return { kind = "paused", text = "Paused (" .. progress .. ")", canResume = true }
+    end
     if batch.isActive() then
-        return { kind = "active", text = "Recording " .. progress }
+        return { kind = "active", text = "Recording " .. progress, canPause = session:canPause() }
     end
     if session ~= nil and session:getOutcome() == "failed" then
         return { kind = "failed", text = ("Failed (%s complete)"):format(progress) }
@@ -314,6 +328,20 @@ function batch.status()
         return { kind = "ready", text = ("Recording ready for %d runs"):format(targetRuns()) }
     end
     return { kind = "idle", text = "Not recording" }
+end
+
+--- Pauses the session between attempts; returns the pause row, or nil when not allowed.
+function batch.pause()
+    return state.session ~= nil and state.session:pause() or nil
+end
+
+--- Ends a pause; returns the pause row, or nil when not paused.
+function batch.unpause()
+    return state.session ~= nil and state.session:unpause() or nil
+end
+
+function batch.isPaused()
+    return state.session ~= nil and state.session:isPaused()
 end
 
 function batch.isActive()
@@ -361,10 +389,12 @@ function batch.restore(session, settings)
     state.ready = session:getOutcome() == nil
 end
 
--- Finished-attempt history for the module UI, rebuilt only when it changes.
+-- Finished-attempt history for the module UI, rebuilt only when it changes. A pause changes its
+-- row's duration without adding a row, so the paused state is part of the cache key.
 local history = {
     session = nil,
     finishedCount = -1,
+    paused = false,
     entries = {},
 }
 
@@ -379,7 +409,8 @@ function batch.history()
             finishedCount = finishedCount + 1
         end
     end
-    if session == history.session and finishedCount == history.finishedCount then
+    local paused = session ~= nil and session:isPaused()
+    if session == history.session and finishedCount == history.finishedCount and paused == history.paused then
         return history.entries
     end
     local entries = {}
@@ -392,11 +423,15 @@ function batch.history()
                 sessionIgtCs = attempt.sessionIgtCs,
                 sessionRtaCs = attempt.sessionRtaCs,
                 sessionLrtCs = attempt.sessionLrtCs,
+                pausedCs = attempt.status == "paused" and attempt.pausedCs or nil,
+                -- The pause in progress; its duration is final once it ends.
+                live = paused and attempt == attempts[#attempts] or nil,
             }
         end
     end
     history.session = session
     history.finishedCount = finishedCount
+    history.paused = paused
     history.entries = entries
     return entries
 end

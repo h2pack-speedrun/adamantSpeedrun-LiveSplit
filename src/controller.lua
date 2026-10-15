@@ -14,6 +14,12 @@ function controller.stopRecording(host, runtime)
     end
 end
 
+function controller.togglePause(host, runtime)
+    if host.isEnabled() then
+        timer.recording.togglePause(runtime)
+    end
+end
+
 function controller.clearRecording(host, runtime)
     if host.isEnabled() then
         timer.recording.clear(runtime)

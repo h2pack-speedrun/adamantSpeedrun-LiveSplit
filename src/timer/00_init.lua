@@ -100,11 +100,6 @@ function timer.batch.history()
     return batch.history()
 end
 
-function timer.batch.keepsSplits()
-    local settings = batch.getSettings()
-    return settings ~= nil and settings.completedRun == "splits"
-end
-
 function timer.batch.hasSession()
     return batch.hasSession()
 end
@@ -125,6 +120,12 @@ end
 
 function timer.recording.stop(runtime)
     local result = recording.stop(runtime)
+    onChanged(runtime)
+    return result
+end
+
+function timer.recording.togglePause(runtime)
+    local result = recording.togglePause(runtime)
     onChanged(runtime)
     return result
 end

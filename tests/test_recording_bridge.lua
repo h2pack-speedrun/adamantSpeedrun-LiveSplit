@@ -9,7 +9,7 @@ local core = support.core
 
 local timerInitStoreValues = {
     ShowIGT = false,
-    ShowRawTimers = false,
+    OverlayMode = "table",
 }
 local timerInitRuntimeContext = {
     data = {

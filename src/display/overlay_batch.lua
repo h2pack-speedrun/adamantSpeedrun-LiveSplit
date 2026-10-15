@@ -1,6 +1,10 @@
--- Multi-run session table: a pinned header, one page of finished attempts, the current attempt
--- and the session total. In categories that keep splits, each attempt shows its biome rows and a
--- page holds whole attempts.
+-- Multi-run session table: a title row (category, progress, page), the column headers, one page
+-- of finished attempts, the current attempt with its biome splits, and the session total. The
+-- title has a row of its own, with empty time cells, so a long title runs over blank space
+-- instead of into the column headers.
+--
+-- In categories that keep splits, each attempt shows its biome rows with session times and a page
+-- holds whole attempts. Otherwise the current attempt shows the live run's splits.
 
 local deps = ...
 local batch = deps.batch
@@ -12,11 +16,13 @@ local paging = deps.paging
 local readPageSize = deps.readPageSize
 local maxPageSize = deps.maxPageSize
 local maxBiomes = deps.maxBiomes
+local currentRunDetails = deps.currentRunDetails
 
 local batchOverlay = {}
 local projectionRows = {}
 local projectionPageRows = {}
 local projectionCurrentRows = {}
+local projectionTitleRow = { key = "title", label = "", igt = "", rta = "", lrt = "" }
 local projectionHeaderRow = { key = "header", label = "", igt = "", rta = "", lrt = "" }
 local projectionTotalRow = { key = "total", label = "", igt = "", rta = "", lrt = "" }
 local projectionCount = 0
@@ -72,7 +78,9 @@ local function headerLabel(rows, page, pages)
 end
 
 local function appendHeader(rows, page, pages, runtime)
-    projectionHeaderRow.label = headerLabel(rows, page, pages)
+    projectionTitleRow.label = headerLabel(rows, page, pages)
+    appendRow(projectionTitleRow)
+    projectionHeaderRow.label = ""
     projectionHeaderRow.igt = isModeVisible("igt", runtime) and "IGT" or ""
     projectionHeaderRow.rta = isModeVisible("rta", runtime) and "RTA" or ""
     projectionHeaderRow.lrt = isModeVisible("lrt", runtime) and "LrT" or ""
@@ -85,20 +93,41 @@ local function trimProjectionRows(previousCount)
     end
 end
 
+-- The current attempt: its heading, then its biome rows. Without kept splits the biomes come from
+-- the live run's splits; the biome in progress already shows the run time, so the heading has none.
+local function appendCurrent(rows, runtime, liveOnly)
+    local heading = rows.current.heading
+    if heading.label == nil or heading.label == "" then
+        return
+    end
+    appendProjectionRow(heading, projectionCurrentRows[1], runtime)
+    if rows.splits then
+        for biome = 1, rows.current.biomeCount do
+            appendProjectionRow(rows.current.biomes[biome], projectionCurrentRows[biome + 1], runtime)
+        end
+        return
+    end
+    local details = currentRunDetails(liveOnly)
+    for biome = 1, maxBiomes do
+        appendProjectionRow(details.biomes[biome], projectionCurrentRows[biome + 1], runtime)
+    end
+end
+
 function batchOverlay.register(overlays, order)
     overlays.createTable("batch", {
         componentName = "LiveSplit_Batch",
         region = overlay.region,
         order = order,
-        -- Header, one page of attempts, the current attempt with its biomes, total.
-        maxRows = maxPageSize + maxBiomes + 3,
+        -- Title, column headers, one page of attempts, the current attempt with its biomes, session total.
+        maxRows = maxPageSize + maxBiomes + 4,
         columnGap = overlay.timerTableColumnGap,
-        columns = overlay.buildTimerTableColumns(isModeVisible),
+        -- Attempt labels ("Staff Circe (repeat)", "Current: Axe") need a wider label column.
+        columns = overlay.buildTimerTableColumns(isModeVisible, overlay.sessionTableLabelWidth),
         visible = batchVisible,
     })
 end
 
-function batchOverlay.buildRows(runtime)
+function batchOverlay.buildRows(runtime, liveOnly)
     local previousCount = projectionCount
     projectionCount = 0
     if not batchVisible(nil, runtime) then
@@ -125,17 +154,14 @@ function batchOverlay.buildRows(runtime)
             appendProjectionRow(group.biomes[biome], projectionPageRows[slot], runtime)
         end
     end
-    appendProjectionRow(rows.current.heading, projectionCurrentRows[1], runtime)
-    for biome = 1, rows.current.biomeCount do
-        appendProjectionRow(rows.current.biomes[biome], projectionCurrentRows[biome + 1], runtime)
-    end
+    appendCurrent(rows, runtime, liveOnly)
     appendProjectionRow(rows.total, projectionTotalRow, runtime)
     trimProjectionRows(previousCount)
     return projectionRows
 end
 
-function batchOverlay.project(ctx, runtime)
-    ctx.setTable("batch", batchOverlay.buildRows(runtime))
+function batchOverlay.project(ctx, runtime, liveOnly)
+    ctx.setTable("batch", batchOverlay.buildRows(runtime, liveOnly))
 end
 
 return batchOverlay

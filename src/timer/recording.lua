@@ -115,7 +115,7 @@ local function restoreSaved(record, saved)
 end
 
 local function armBatch(runtime, settings, allowResume)
-    if allowResume and runtime.data.read("ResumeAfterRestart") == true then
+    if allowResume and settings.resumeAfterRestart then
         local record, saved = store.load(runtime.status)
         if record ~= nil then
             restoreSaved(record, saved)
@@ -245,12 +245,24 @@ function recording.suspend()
     clearSingleRecording(false)
 end
 
+--- Pauses or resumes a multi-run session between attempts. Returns true when it changed.
+function recording.togglePause(runtime)
+    if not recording.isMultiRunMode() then
+        return false
+    end
+    local row = batch.isPaused() and batch.unpause() or batch.pause()
+    saveSessionAttempt(runtime, row)
+    return row ~= nil
+end
+
 function recording.onRunStarted(runtime, run)
     if isRecordingReady(runtime) and splits.startRun(run) and not recording.isMultiRunMode() then
         beginSingleAttempt(run)
     end
     if recording.isMultiRunMode() then
         resumeSession(runtime)
+        -- Starting a run ends a pause; save the pause's final duration.
+        saveSessionAttempt(runtime, batch.unpause())
         if batch.startRun(resolveKeys(run), currentRunOrdinal()) then
             saveSessionAttempt(runtime, batch.getSession():getActiveAttempt())
         end
@@ -322,7 +334,7 @@ function recording.initialize(runtime)
             stopBatchRecording()
             -- A finished batch's result is shown again after a restart.
             local record, saved = store.load(runtime.status)
-            if record ~= nil and record.state ~= "open" and runtime.data.read("ResumeAfterRestart") == true then
+            if record ~= nil and record.state ~= "open" and readSettings(runtime).resumeAfterRestart then
                 restoreSaved(record, saved)
             end
         end

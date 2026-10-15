@@ -62,6 +62,11 @@ local function init()
         end,
     })
 
+    local pauseHotkey = import("pause_hotkey.lua", nil, {
+        pauseKey = data.pauseKey,
+        togglePause = controller.togglePause,
+    })
+
     actions.attach(module, controller)
     sharedSnapshot.register(module.shared)
     timer.installHooks(module.hooks)
@@ -73,6 +78,7 @@ local function init()
     module.onCommit(controller.onCommit)
     module.onActivate(controller.onActivate)
     pageHotkeys.attach(module)
+    pauseHotkey.attach(module)
 
     module.fallbackUi.attachGuiOnce(function(fallbackUi)
         rom.gui.add_imgui(fallbackUi.renderWindow)

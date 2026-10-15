@@ -7,6 +7,7 @@ local TIMER_TABLE_VALUE_WIDTH = 78
 local timerOverlay = {}
 timerOverlay.region = OVERLAY_REGION
 timerOverlay.timerTableColumnGap = 28
+timerOverlay.sessionTableLabelWidth = 190
 
 local function buildModeColumn(mode, modeVisible)
     return {
@@ -40,11 +41,11 @@ function timerOverlay.buildSummaryColumns()
     }
 end
 
-function timerOverlay.buildTimerTableColumns(modeVisible)
+function timerOverlay.buildTimerTableColumns(modeVisible, labelWidth)
     return {
         {
             key = "label",
-            minWidth = TIMER_TABLE_LABEL_WIDTH,
+            minWidth = labelWidth or TIMER_TABLE_LABEL_WIDTH,
             justify = "Left",
         },
         buildModeColumn("igt", modeVisible),

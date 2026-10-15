@@ -19,6 +19,32 @@ local KEY_COLUMNS = {
     aspect = "Aspect",
 }
 
+-- Allowed regions as a comma list: "underworld,surface"; "" when any region counts.
+local function encodeAllowed(allowed)
+    if allowed == nil then
+        return ""
+    end
+    local values = {}
+    for value, permitted in pairs(allowed) do
+        if permitted == true then
+            values[#values + 1] = value
+        end
+    end
+    table.sort(values)
+    return table.concat(values, ",")
+end
+
+local function decodeAllowed(text)
+    if text == nil or text == "" then
+        return nil
+    end
+    local allowed = {}
+    for value in text:gmatch("[^,]+") do
+        allowed[value] = true
+    end
+    return allowed
+end
+
 local function emptyToNil(value)
     if value == "" then
         return nil
@@ -42,6 +68,7 @@ local function toRow(attempt)
         SessionRtaCs = attempt.sessionRtaCs or 0,
         SessionLrtCs = attempt.sessionLrtCs or 0,
         CountIndex = attempt.countIndex or 0,
+        PausedCs = attempt.pausedCs or 0,
     }
     for keyName, column in pairs(KEY_COLUMNS) do
         row[column] = attempt[keyName] or ""
@@ -66,6 +93,7 @@ local function fromRow(row)
         sessionRtaCs = row.SessionRtaCs,
         sessionLrtCs = row.SessionLrtCs,
         countIndex = zeroToNil(row.CountIndex),
+        pausedCs = row.Status == "paused" and row.PausedCs or nil,
     }
     for keyName, column in pairs(KEY_COLUMNS) do
         attempt[keyName] = emptyToNil(row[column])
@@ -103,10 +131,13 @@ end
 --- Session state, rules, clocks and summed IGT.
 function store.saveTotals(status, record, settings)
     writeIfChanged(status, "SessionState", record.state)
+    writeIfChanged(status, "SessionPaused", record.paused == true)
     writeIfChanged(status, "SessionCategory", settings.category or "")
     writeIfChanged(status, "SessionDistinct", settings.distinct or "")
     writeIfChanged(status, "SessionSame", settings.same or "")
     writeIfChanged(status, "SessionOnDeath", settings.onDeath or "")
+    writeIfChanged(status, "SessionAllowed", encodeAllowed(settings.allowed))
+    writeIfChanged(status, "SessionKeepSplits", settings.completedRun == "splits")
     writeIfChanged(status, "SessionRuns", settings.runs)
     store.saveClocks(status, record)
     writeIfChanged(status, "SessionIgtCs", record.igtCs)
@@ -127,10 +158,13 @@ end
 
 function store.clear(status)
     writeIfChanged(status, "SessionState", "")
+    writeIfChanged(status, "SessionPaused", false)
     writeIfChanged(status, "SessionCategory", "")
     writeIfChanged(status, "SessionDistinct", "")
     writeIfChanged(status, "SessionSame", "")
     writeIfChanged(status, "SessionOnDeath", "")
+    writeIfChanged(status, "SessionAllowed", "")
+    writeIfChanged(status, "SessionKeepSplits", false)
     writeIfChanged(status, "SessionRuns", 0)
     writeIfChanged(status, "SessionRtaCs", 0)
     writeIfChanged(status, "SessionLoadCs", 0)
@@ -153,12 +187,15 @@ function store.load(status)
         rtaCs = status.read("SessionRtaCs"),
         loadCs = status.read("SessionLoadCs"),
         igtCs = status.read("SessionIgtCs"),
+        paused = status.read("SessionPaused") == true,
         attempts = attempts,
     }, {
         category = status.read("SessionCategory"),
         distinct = status.read("SessionDistinct"),
         same = status.read("SessionSame"),
         onDeath = status.read("SessionOnDeath"),
+        allowed = decodeAllowed(status.read("SessionAllowed")),
+        completedRun = status.read("SessionKeepSplits") == true and "splits" or "summary",
         runs = status.read("SessionRuns"),
     }
 end

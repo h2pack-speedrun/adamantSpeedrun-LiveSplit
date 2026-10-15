@@ -32,7 +32,7 @@ function display.project(ctx, opts)
     display.paging.takePending()
     local adapters = ensureOverlays()
     adapters.singleRun.project(ctx, runtime)
-    adapters.batch.project(ctx, runtime)
+    adapters.batch.project(ctx, runtime, opts.liveOnly == true)
     adapters.splits.project(ctx, runtime, opts.liveOnly == true)
     ctx.refreshOwned()
 end
@@ -62,6 +62,7 @@ function ensureOverlays()
             readPageSize = settings.pageSize,
             maxPageSize = data.pageSize.max,
             maxBiomes = data.maxAttemptBiomes,
+            currentRunDetails = timer.currentRun.detailsSnapshot,
         }),
         splits = import('display/overlay_splits.lua', nil, {
             currentRun = timer.currentRun,

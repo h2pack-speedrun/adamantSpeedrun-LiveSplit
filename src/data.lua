@@ -3,10 +3,15 @@ local data = {}
 data.batchTargetRuns = {
     default = 3,
     min = 1,
-    max = 10,
+    max = 50,
 }
 
-data.recordingModes = { "single", "multi" }
+-- What the overlay shows: the splits table, or only the compact IGT/RTA/LrT rows.
+data.overlayModes = { "table", "timer" }
+data.overlayModeNames = {
+    table = "Splits table",
+    timer = "Timer only",
+}
 
 -- Finished attempts per overlay page.
 data.pageSize = {
@@ -21,6 +26,9 @@ data.pageKeys = {
     previous = { id = "PagePrev", alias = "PagePrevKey", default = "F7" },
     next = { id = "PageNext", alias = "PageNextKey", default = "F8" },
 }
+
+-- Pauses a multi-run session between runs (Lib-managed hotkey; Quick Pause defaults to F9).
+data.pauseKey = { id = "PauseSession", alias = "PauseSessionKey", default = "F6" }
 
 function data.normalizeRecordingMode(mode)
     if mode == "multi" then
@@ -49,18 +57,7 @@ function data.buildStorage()
             default = false,
             hash = false,
         },
-        {
-            type = "bool",
-            alias = "ShowRawTimers",
-            default = false,
-            hash = false,
-        },
-        {
-            type = "bool",
-            alias = "ShowRecordingTable",
-            default = true,
-            hash = false,
-        },
+        { type = "string", alias = "OverlayMode", default = "table", maxLen = 16, hash = false },
         {
             type = "string",
             alias = "RecordingMode",
@@ -82,6 +79,12 @@ function data.buildStorage()
         { type = "string", alias = "CustomDistinct", default = "none", maxLen = 16, hash = false },
         { type = "string", alias = "CustomSame", default = "none", maxLen = 16, hash = false },
         { type = "string", alias = "CustomOnDeath", default = "reset", maxLen = 16, hash = false },
+        -- Regions Custom accepts when each run needs a new region.
+        { type = "bool", alias = "CustomAllowUnderworld", default = true, hash = false },
+        { type = "bool", alias = "CustomAllowSurface", default = true, hash = false },
+        { type = "bool", alias = "CustomAllowDream", default = true, hash = false },
+        -- Keep each counted run's biome splits in the session, as All Regions does.
+        { type = "bool", alias = "CustomKeepSplits", default = false, hash = false },
         {
             type = "bool",
             alias = "ResumeAfterRestart",
@@ -129,6 +132,8 @@ local function attemptColumns()
         { type = "int", alias = "SessionRtaCs", default = 0 },
         { type = "int", alias = "SessionLrtCs", default = 0 },
         { type = "int", alias = "CountIndex", default = 0 },
+        -- A "paused" row: how long the session clocks were stopped.
+        { type = "int", alias = "PausedCs", default = 0 },
     }
     -- Biome split N: B<N>Code (biome room set, empty when unused) and its session times.
     for index = 1, data.maxAttemptBiomes do
@@ -155,6 +160,11 @@ function data.buildStatus()
         SessionDistinct = { type = "string", persist = true, default = "", maxLen = 16 },
         SessionSame = { type = "string", persist = true, default = "", maxLen = 16 },
         SessionOnDeath = { type = "string", persist = true, default = "", maxLen = 16 },
+        -- Allowed regions as a comma list ("" for any), and whether runs keep biome splits.
+        SessionAllowed = { type = "string", persist = true, default = "", maxLen = 32 },
+        SessionKeepSplits = { type = "bool", persist = true, default = false },
+        -- The session was saved while paused, so it resumes paused.
+        SessionPaused = { type = "bool", persist = true, default = false },
         SessionRuns = persistedInt(),
         SessionRtaCs = persistedInt(),
         SessionLoadCs = persistedInt(),

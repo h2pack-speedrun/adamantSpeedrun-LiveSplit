@@ -5,6 +5,7 @@ function actions.build(controller)
         recordingStart = controller.startRecording,
         recordingStop = controller.stopRecording,
         recordingClear = controller.clearRecording,
+        recordingPause = controller.togglePause,
     }
 end
 
