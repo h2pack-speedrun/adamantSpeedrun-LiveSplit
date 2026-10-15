@@ -1,6 +1,6 @@
 # Category Sessions Design
 
-Status: phases 1-4 implemented; phase 5 (shared Lib hotkeys) is optional. See the phases at the end.
+Status: implemented (phases 1-6). See the phases at the end.
 
 ## Goal
 
@@ -30,6 +30,7 @@ behavior survives as the advanced, fully configurable form of the same engine.
 | `duplicate` | Cleared and passed the rules, but its `distinct` value was already counted. |
 | `invalid` | Broke a rule at run start (for example the wrong aspect for All Regions). |
 | `active` | The run in progress. |
+| `paused` | Not a run: a pause between attempts (see Pauses). |
 
 A failed attempt does not consume its key: a failed Torch run can be retried.
 
@@ -44,11 +45,19 @@ these in.
 |---|---|---|
 | `runs` | integer | Distinct values needed to complete the session. |
 | `distinct` | `none`, `route`, `weapon`, `aspect` | Each counted run must add a new value of this key. |
-| `same` | `none`, `weapon`, `aspect` | Every attempt must share this key with the first attempt. |
+| `allowed` | set of regions | With `distinct = route`: the regions that can count (Underworld, Surface, Dream Dives). |
+| `same` | `none`, `route`, `weapon`, `aspect` | Every attempt must share this key with the first attempt. |
 | `onDeath` | `continue`, `reset` | `continue` logs a failed attempt and keeps going; `reset` ends the session. |
 | `resumeAfterRestart` | bool | After a game exit or crash, resume the saved session (`true`) or discard it. |
 
 `onDeath` and `resumeAfterRestart` are independent options.
+
+**Finishable rules.** An aspect belongs to one weapon, so some rule pairs can never complete:
+`same` equal to `distinct`, or `distinct = weapon` with `same = aspect`. `runs` is also capped by
+how many values `distinct` has: the allowed regions (1-3), 6 weapons, 24 aspects (4 with
+`same = weapon`), or 50 with no distinct key. `categories.settingsFor` and `settingsFromSaved`
+enforce both (an incompatible `same` becomes `none`, `runs` is capped), and the Settings tab only
+offers values that pass.
 
 ### Display
 
@@ -77,6 +86,11 @@ Single Run keeps today's behavior: every new run starts a fresh recording that r
 The old multi-run batch is the advanced form: `distinct = none`, `same = none`,
 `onDeath = reset`, `completedRun = summary`, `label = index`, with `runs` chosen by the player.
 
+Custom stores every rule a preset uses (`BatchTargetRuns`, `CustomDistinct`, `CustomSame`,
+`CustomOnDeath`, `CustomAllow*`, `CustomKeepSplits`, `ResumeAfterRestart`), so any preset can be
+reproduced: **Copy to Custom** writes a preset's rules into these fields
+(`categories.copyToCustom`).
+
 ## Timing
 
 - **RTA** is the official time for every category. It runs from the first attempt's start across
@@ -88,6 +102,24 @@ The old multi-run batch is the advanced form: `distinct = none`, `same = none`,
   column toggles.
 - After a game exit or crash, a resumed session continues RTA from its saved elapsed time. Time
   while the game was closed is not counted.
+
+## Pauses
+
+A long session (All Aspects is 24 runs) needs breaks. A pause is allowed only between attempts
+of an open, running session (`Session:canPause`): never inside a run, before the first run, or
+after the session ends. Every category allows pauses; the overlay shows each one.
+
+- Pausing stops the session RTA and LrT clocks and appends a `paused` row to the attempt log.
+  IGT is unaffected.
+- The row's `pausedCs` is how long the clocks were stopped. The overlay and history show it as a
+  "Paused" row, with the length in the RTA and LrT columns, live while paused.
+- Pausing again before the next attempt continues the same row.
+- Pressing the key or button again ends the pause, and so does starting a run.
+- Controls: the Lib hotkey `PauseSession` (alias `PauseSessionKey`, default F6) and Pause / Resume
+  on the Recording tab's action row.
+- A session saved while paused (`SessionPaused`) resumes paused after a restart. Time while the
+  game was closed counts as neither session time nor pause time.
+- Pause rows never become the reference attempt for `same`.
 
 ## Key resolution
 
@@ -107,9 +139,12 @@ Implemented in phase 2 for multi-run sessions. Single Run does not persist: it h
 worth resuming.
 
 **Storage.** Persisted module status (`data.buildStatus`): `SessionState` (`open`, `completed`,
-`failed`, or empty), `SessionRuns`, the session clocks `SessionRtaCs`, `SessionLoadCs` and
+`failed`, or empty), `SessionPaused`, the session rules (`SessionCategory`, `SessionRuns`,
+`SessionDistinct`, `SessionSame`, `SessionOnDeath`, `SessionAllowed` as a comma list,
+`SessionKeepSplits`), the session clocks `SessionRtaCs`, `SessionLoadCs` and
 `SessionIgtCs`, and the `SessionAttempts` table (status, route, weapon, aspect, run ordinal and
-end times and up to four biome splits per attempt, capped at `data.maxSessionAttempts`). `timer/session_store.lua` maps a
+end times, `PausedCs` for pause rows and up to four biome splits per attempt, capped at
+`data.maxSessionAttempts`). `timer/session_store.lua` maps a
 session record to these fields. Every persisted status write rewrites the module config file
 (about 90 KB at 60 attempts), so writes stay incremental: one table row per attempt change, and
 only the clocks at checkpoints.
@@ -142,9 +177,19 @@ are independent.
 Lib overlay tables have a fixed `maxRows`, but LiveSplit chooses which rows to project each frame,
 so paging needs no Lib change.
 
-- **Pinned rows** always show: a header with category, progress and page
-  (`All Aspects  9/24 · 3 failed · p2/4`), the active attempt (with biome splits when the category
-  keeps them), and the session total.
+- **Pinned rows** always show:
+  - a title row with category, progress and page (`All Aspects  9/24 · 3 failed · p2/4`). Its
+    time cells are empty, so a long title runs over blank space instead of into the column
+    headers.
+  - the column headers;
+  - the current attempt and its biome splits;
+  - the session total, labelled "Session".
+- **Current biome splits.** Categories that keep splits show the attempt's biome rows with
+  session-cumulative times. Other categories show the live run's splits with run times. The
+  separate single-run splits table only appears in Single Run.
+- The session table's label column is wider (`sessionTableLabelWidth`) for long attempt labels.
+- **Overlay mode** (`OverlayMode`): `table` shows the tables; `timer` shows only the compact
+  IGT/RTA/LrT rows (session totals in multi-run).
 - **Paged rows** show finished attempts, `pageSize` attempts per page. An attempt is never split
   across pages.
 - **Follow newest**: by default the overlay shows the newest page. Paging back holds that page
@@ -157,10 +202,21 @@ so paging needs no Lib change.
 
 ## UI
 
-- **Simple (default)**: a category picker with Single Run and the five presets, a one-line rule
-  summary for the selected preset, the recording controls, and the display toggles.
-- **Advanced**: every rule and display setting, starting from the selected preset. Editing a
-  setting turns the session into a custom category.
+LiveSplit declares two top-level tabs with `module.ui.tabs`; ModpackLib adds its Hotkeys &
+Advanced tab (page keys, Debug Mode, Resync) after them.
+
+- **Recording**:
+  - the category picker on one row with the actions (Start, Stop / Clear, Start New / Clear, and
+    Pause or Resume between runs);
+  - the coloured status, with the rule summary under it (`categories.summary`);
+  - the overlay rows: Overlay mode, Columns, and the page size for multi-run categories;
+  - the session history under a collapsible header, collapsed by default (the overlay is the
+    primary view).
+- **Settings**: the selected category's rules. Presets show them read-only, with Copy to Custom on
+  the header row. Custom edits them, offering only finishable values. Single Run has no session
+  rules.
+- Rule and display rows share a muted label column, measured from the widest label with the
+  current font.
 
 ## Shared snapshot
 
@@ -186,4 +242,10 @@ are added as new fields, so existing readers keep working.
    session table, and hides the separate single-run splits table. A run whose distinct key cannot
    be read is invalid. Session rules are saved with the session so a resumed session keeps them.
 5. **Done in ModpackLib.** Hotkeys are a Lib capability with cross-module conflict resolution;
-   LiveSplit's page keys use it.
+   LiveSplit's page and pause keys use it.
+6. **Expressive Custom, UI and pauses.** Done:
+   - Custom covers every preset rule (allowed regions, kept splits), and its rules are always
+     finishable.
+   - Presets are read-only with Copy to Custom.
+   - The Recording / Settings tabs, the merged session table and the Overlay mode setting.
+   - Pauses between runs.
