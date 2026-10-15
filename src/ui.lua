@@ -262,12 +262,11 @@ local function drawDisplaySection(draw, state, includeColumns)
     end
 end
 
-local function drawPagingSection(draw, state, hotkeys)
+-- The page keys' pickers are drawn by ModpackLib in the module header (module.hotkeys).
+local function drawPagingSection(draw, state)
     drawSection(draw, "Multi-Run Overlay Pages",
-        "The overlay shows one page of finished runs; the keys page through older ones.")
+        "The overlay shows one page of finished runs; the page keys (under Hotkeys above) page through older ones.")
     draw.widgets.stepper(state.get("PageSize"), PAGE_SIZE_OPTS)
-    draw.widgets.hotkey(hotkeys.get(data.pageKeys.previous.id))
-    draw.widgets.hotkey(hotkeys.get(data.pageKeys.next.id))
 end
 
 -- Formatted history lines, cached by the history list they were built from.
@@ -317,13 +316,13 @@ local function drawHistorySection(draw, statusView)
     end
 end
 
-function module.drawTab(draw, state, actions, statusView, hotkeys)
+function module.drawTab(draw, state, actions, statusView)
     local showRecordingTable = readBool(state, "ShowRecordingTable", true)
     local showRawTimers = readBool(state, "ShowRawTimers", false)
     drawRecordingSection(draw, state, actions, statusView, showRecordingTable, showRawTimers)
     drawDisplaySection(draw, state, true)
     if readRecordingMode(state) == "multi" then
-        drawPagingSection(draw, state, hotkeys)
+        drawPagingSection(draw, state)
         drawHistorySection(draw, statusView)
     end
 end
@@ -337,7 +336,7 @@ end
 
 function module.attach(libModule, statusView)
     libModule.ui.tab(function(_, ui)
-        return module.drawTab(ui.draw, ui.data, ui.actions, statusView, ui.hotkeys)
+        return module.drawTab(ui.draw, ui.data, ui.actions, statusView)
     end)
     libModule.ui.quickContent(function(_, ui)
         return module.drawQuickContent(ui.draw, ui.data, ui.actions, statusView)

@@ -129,11 +129,6 @@ local texts = {}
 local dropdownLabels = {}
 local hotkeyRefs = {}
 local childDepth = 0
-local historyHotkeys = {
-    get = function(id)
-        return id
-    end,
-}
 local fullDraw = {
     imgui = {
         SameLine = function() end,
@@ -168,7 +163,7 @@ local fullDraw = {
     },
 }
 uiSessionValues.Category = "custom"
-uiModule.drawTab(fullDraw, drawState, uiActions, historyView, historyHotkeys)
+uiModule.drawTab(fullDraw, drawState, uiActions, historyView)
 local function hasDropdown(label)
     for _, value in ipairs(dropdownLabels) do
         if value == label then
@@ -179,8 +174,8 @@ local function hasDropdown(label)
 end
 assertEqual(dropdownLabels[1], "Category")
 assert(hasDropdown("Each counted run needs a new"), "expected custom rule dropdowns")
-assertEqual(hotkeyRefs[1], "PagePrev")
-assertEqual(hotkeyRefs[2], "PageNext")
+-- Page keys are drawn by Lib in the module header, not by LiveSplit.
+assertEqual(#hotkeyRefs, 0)
 assertEqual(childDepth, 0)
 local historyTexts = {}
 for _, entry in ipairs(texts) do
@@ -195,7 +190,7 @@ assert(historyTexts[2].text:find("LrT --", 1, true), historyTexts[2].text)
 -- History lines are cached while the history list is unchanged.
 local firstLine = historyTexts[1].text
 texts = {}
-uiModule.drawTab(fullDraw, drawState, uiActions, historyView, historyHotkeys)
+uiModule.drawTab(fullDraw, drawState, uiActions, historyView)
 local cachedLine = nil
 for _, entry in ipairs(texts) do
     if entry.text:find("^%s*1  ") then

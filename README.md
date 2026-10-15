@@ -39,7 +39,7 @@ The timer can show these timing columns:
 - Custom sets your own rules: 1 to 10 runs, which key must be new or stay the same each run, and whether a death ends the session.
 - **Single-run recording continues across runs until you stop it.** A multi-run session stops when it completes (or, in Custom, when a death ends it), keeping its results until you press Start New.
 - Disabling LiveSplit or the pack clears the current recording but keeps it armed for when you re-enable.
-- The multi-run overlay shows one page of finished runs; page through older ones with F7/F8. The keys are managed by ModpackLib (modifiers allowed, conflicts with other modules reported) and listed on the Speedrun window's Hotkeys page. The module tab lists the full session history.
+- The multi-run overlay shows one page of finished runs; page through older ones with F7/F8. The keys are managed by ModpackLib: set them under Hotkeys at the top of the module's settings (modifiers allowed, conflicts with other modules reported). The module tab lists the full session history.
 - Multi-run sessions survive a game exit or crash (Resume after restart, on by default); time while the game is closed is not counted.
 
 ### Single-Run Recording
