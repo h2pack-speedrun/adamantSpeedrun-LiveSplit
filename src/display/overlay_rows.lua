@@ -6,6 +6,9 @@ local TIMER_TABLE_VALUE_WIDTH = 78
 
 local timerOverlay = {}
 timerOverlay.region = OVERLAY_REGION
+-- Timers keep showing while the game hides its combat HUD (dialogue, cutscenes, menus): RTA keeps
+-- running there too.
+timerOverlay.hudVisibility = "independent"
 timerOverlay.timerTableColumnGap = 28
 timerOverlay.sessionTableLabelWidth = 190
 

@@ -53,6 +53,7 @@ function splitOverlay.register(overlays, order)
         componentName = "LiveSplit_Split",
         region = overlay.region,
         order = order,
+        hudVisibility = overlay.hudVisibility,
         maxRows = 6,
         columnGap = overlay.timerTableColumnGap,
         columns = overlay.buildTimerTableColumns(isModeVisible),

@@ -118,6 +118,7 @@ function batchOverlay.register(overlays, order)
         componentName = "LiveSplit_Batch",
         region = overlay.region,
         order = order,
+        hudVisibility = overlay.hudVisibility,
         -- Title, column headers, one page of attempts, the current attempt with its biomes, session total.
         maxRows = maxPageSize + maxBiomes + 4,
         columnGap = overlay.timerTableColumnGap,

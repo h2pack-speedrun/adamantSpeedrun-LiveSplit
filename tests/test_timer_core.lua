@@ -248,6 +248,8 @@ assert(singleRunOverlayDeclarations["summary.igt"] ~= nil, "expected IGT line de
 assert(singleRunOverlayDeclarations["summary.rta"] ~= nil, "expected RTA line declaration")
 assert(singleRunOverlayDeclarations["summary.lrt"] ~= nil, "expected LrT line declaration")
 assertEqual(singleRunOverlayDeclarations["summary.igt"].visible(), false)
+-- Timers stay up while the game hides its combat HUD.
+assertEqual(singleRunOverlayDeclarations["summary.igt"].hudVisibility, "independent")
 setTime(0)
 _G.CurrentRun = {
     GameplayTime = 0,

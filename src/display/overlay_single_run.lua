@@ -53,6 +53,7 @@ function singleRunOverlay.register(overlays, order)
         overlays.createLine(line.name, {
             componentName = "LiveSplit_" .. line.label,
             region = REGION,
+            hudVisibility = overlay.hudVisibility,
             order = order + line.orderOffset,
             columnGap = 20,
             columns = overlay.buildSummaryColumns(),

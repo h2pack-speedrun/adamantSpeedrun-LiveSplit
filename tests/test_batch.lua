@@ -104,6 +104,7 @@ batchOverlayAdapter.register({
 }, 300)
 assert(batchOverlayDeclarations.batch ~= nil, "expected batch table declaration")
 assertEqual(batchOverlayDeclarations.batch.order, 300)
+assertEqual(batchOverlayDeclarations.batch.hudVisibility, "independent")
 assertEqual(batchOverlayDeclarations.batch.maxRows, data.pageSize.max + data.maxAttemptBiomes + 4)
 assertEqual(batchOverlayDeclarations.batch.visible(), false)
 overlayBatch.start(support.batchSettings(5))
