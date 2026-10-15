@@ -1,4 +1,4 @@
-local deps = ... or {}
+local deps = ...
 local currentRun = deps.currentRun
 local overlay = deps.overlay
 local isVisible = deps.isVisible

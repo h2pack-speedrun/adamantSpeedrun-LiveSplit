@@ -1,16 +1,11 @@
 local actions = {}
 
-local function call(controller, methodName)
-    return function(host, runtime)
-        return controller[methodName](host, runtime)
-    end
-end
-
 function actions.build(controller)
     return {
-        recordingStart = call(controller, "startRecording"),
-        recordingStop = call(controller, "stopRecording"),
-        recordingClear = call(controller, "clearRecording"),
+        recordingStart = controller.startRecording,
+        recordingStop = controller.stopRecording,
+        recordingClear = controller.clearRecording,
+        recordingPause = controller.togglePause,
     }
 end
 

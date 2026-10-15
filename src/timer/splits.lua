@@ -1,22 +1,10 @@
-local deps = ... or {}
+local deps = ...
 local toCentiseconds = deps.toCentiseconds
 local isRunSuccess = deps.isRunSuccess
+local keys = deps.keys
 
-local ROUTES = {
-    underworld = { "F", "G", "H", "I" },
-    surface = { "N", "O", "P", "Q" },
-}
-
-local BIOME_LABELS = {
-    F = "Erebus",
-    G = "Oceanus",
-    H = "Fields",
-    I = "Tartarus",
-    N = "Ephyra",
-    O = "Thessaly",
-    P = "Olympus",
-    Q = "Summit",
-}
+local ROUTES = keys.ROUTES
+local BIOME_LABELS = keys.BIOME_NAMES
 
 local EMPTY_ROUTE = {}
 local EMPTY_SNAPSHOT = {}
@@ -83,21 +71,11 @@ local function clearRows()
 end
 
 local function detectRoute(run)
-    if not run then
-        return nil, nil
+    local routeType = keys.routeOf(run)
+    if routeType == "dream" then
+        return routeType, {}
     end
-    if run.IsDreamRun then
-        return "dream", {}
-    end
-
-    local currentRoomSet = run.CurrentRoom and run.CurrentRoom.RoomSetName
-    if currentRoomSet == "N" or currentRoomSet == "O" or currentRoomSet == "P" or currentRoomSet == "Q"
-        or run.BiomesReached and run.BiomesReached.N then
-
-        return "surface", cloneRoute(ROUTES.surface)
-    end
-
-    return "underworld", cloneRoute(ROUTES.underworld)
+    return routeType, routeType and cloneRoute(ROUTES[routeType]) or nil
 end
 
 local function timeCs(value)
@@ -137,9 +115,6 @@ local function getCurrentBiome(run)
 end
 
 local function getRoute(run)
-    if state.routeType == nil then
-        splits.startRun(run)
-    end
     if state.routeType == "dream" then
         return run and run.BiomeVisitOrder or EMPTY_ROUTE
     end
@@ -224,6 +199,19 @@ function splits.startRun(run)
     return true
 end
 
+-- Starts capturing a run that was already underway when recording was armed.
+function splits.adoptRun(run)
+    if state.routeType == nil then
+        return splits.startRun(run)
+    end
+    return false
+end
+
+-- Stops arming new runs while keeping the recorded rows and result visible.
+function splits.disarm()
+    state.started = false
+end
+
 function splits.recordCompletedBiomes(timer, run, snapshot)
     if not state.active then
         return false
@@ -300,70 +288,16 @@ function splits.clear(keepStarted)
     clearRows()
 end
 
-function splits.status()
-    if state.active then
-        return {
-            kind = "active",
-            text = "Recording current run",
-        }
-    end
-    if state.failed then
-        return {
-            kind = "failed",
-            text = "Recording failed",
-        }
-    end
-    if state.completed then
-        return {
-            kind = "recorded",
-            text = "Recording complete",
-        }
-    end
-    if state.started then
-        return {
-            kind = "ready",
-            text = "Recording ready",
-        }
-    end
-    return {
-        kind = "idle",
-        text = "Not recording",
-    }
-end
-
 function splits.hasDetails()
-    return state.started and (state.active or state.completed or state.failed)
+    return state.active or state.completed or state.failed
 end
 
 function splits.isStarted()
     return state.started == true
 end
 
-function splits.rows()
-    return rows
-end
-
 function splits.details()
     return rows
-end
-
-function splits.row(index, timer, run, snapshot)
-    local route = getRoute(run)
-    local row = rows.biomes[index]
-    if not row then
-        return nil
-    end
-
-    updateBiomeRow(row, index, timer, run, route, snapshot)
-    if row.label == "" then
-        return nil
-    end
-    return row
-end
-
-function splits.totalRow(timer, snapshot)
-    setSnapshotRow(rows.total, "Total", snapshot, timer)
-    return rows.total
 end
 
 return splits

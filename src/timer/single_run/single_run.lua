@@ -1,4 +1,4 @@
-local deps = ... or {}
+local deps = ...
 local core = deps.core
 local isMultiRunMode = deps.isMultiRunMode
 
@@ -25,10 +25,6 @@ function LiveRunTimer:stop()
     self.Running = false
     self.RtaTimer:stop()
     self.LrtTimer:stop()
-end
-
-function LiveRunTimer:update()
-    self.RtaTimer:update()
 end
 
 function LiveRunTimer:getRealTime()
@@ -99,9 +95,6 @@ function singleRun.startDisplayLoop()
 end
 
 function singleRun.updateTick()
-    if activeTimer and activeTimer.Running then
-        activeTimer:update()
-    end
     updateSnapshot()
     return activeTimer
 end
@@ -136,7 +129,5 @@ end
 function singleRun.getSnapshot()
     return snapshot
 end
-
-singleRun.LiveRunTimer = LiveRunTimer
 
 return singleRun

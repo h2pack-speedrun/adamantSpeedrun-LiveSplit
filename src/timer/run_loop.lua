@@ -1,11 +1,10 @@
-local deps = ... or {}
+local deps = ...
 local singleRun = deps.singleRun
 local recording = deps.recording
 local splits = deps.splits
 local batch = deps.batch
 local getCurrentRun = deps.getCurrentRun
-local emit = deps.emit or function() end
-local eventNames = deps.events
+local onChanged = deps.onChanged
 
 local runLoop = {}
 
@@ -17,18 +16,18 @@ local function snapshot()
     return singleRun.getSnapshot()
 end
 
-local function updateLiveRecordingRows(timer, run, timerSnapshot)
+local function updateLiveRecordingRows(runtime, timer, run, timerSnapshot)
     if timer then
+        recording.adoptRun(run)
         splits.recordCompletedBiomes(timer, run, timerSnapshot)
         splits.updateLiveRows(timer, run, timerSnapshot)
+        recording.captureBiomes(runtime, run)
     end
 end
 
-function runLoop.updateTick()
+function runLoop.updateTick(runtime)
     local timer = singleRun.updateTick()
-    batch.updateTimer()
-    updateLiveRecordingRows(timer, getCurrentRun(), snapshot())
-    return true
+    updateLiveRecordingRows(runtime, timer, getCurrentRun(), snapshot())
 end
 
 function runLoop.hasActiveDisplayLoop()
@@ -36,52 +35,34 @@ function runLoop.hasActiveDisplayLoop()
 end
 
 function runLoop.ensureDisplayLoop()
-    if singleRun.startDisplayLoop() then
-        return runLoop.hasActiveDisplayLoop()
-    end
-
+    singleRun.startDisplayLoop()
     return runLoop.hasActiveDisplayLoop()
 end
 
-function runLoop.cleanup(runtime)
+function runLoop.cleanup()
     singleRun.clear()
-    recording.stop(runtime)
+    recording.suspend()
 end
 
 function runLoop.installHooks(hooks)
     singleRun.installHooks(hooks, {
-        isEnabled = function(host)
-            return host.isEnabled() == true
-        end,
         onRunStarted = function(runtime)
-            recording.onRunStarted(getCurrentRun(), activeTimer(), snapshot())
-            emit(eventNames.currentRunStarted, runtime)
-            emit(eventNames.currentRunSummaryChanged, runtime)
-            emit(eventNames.currentRunDetailsChanged, runtime)
-            emit(eventNames.batchSessionChanged, runtime)
-        end,
-        onDisplayLoopStarted = function(runtime)
-            emit(eventNames.currentRunDisplayStarted, runtime)
-            emit(eventNames.currentRunSummaryChanged, runtime)
+            recording.onRunStarted(runtime, getCurrentRun())
         end,
         onLoadEvent = function(runtime, isLoading)
             recording.onLoadEvent(isLoading)
-            emit(isLoading and eventNames.loadRemovalStarted or eventNames.loadRemovalEnded, runtime)
-            emit(eventNames.currentRunSummaryChanged, runtime)
-            emit(eventNames.batchSessionChanged, runtime)
+            onChanged(runtime)
         end,
         onRunFinalized = function(runtime)
-            recording.onRunFinalized(activeTimer(), getCurrentRun(), snapshot())
-            emit(eventNames.currentRunFinalized, runtime)
-            emit(eventNames.currentRunSummaryChanged, runtime)
-            emit(eventNames.currentRunDetailsChanged, runtime)
-            emit(eventNames.batchSessionChanged, runtime)
-            emit(eventNames.recordingStatusChanged, runtime)
+            recording.onRunFinalized(runtime, activeTimer(), getCurrentRun(), snapshot())
         end,
         onDisplayChanged = function(runtime)
-            updateLiveRecordingRows(activeTimer(), getCurrentRun(), snapshot())
-            emit(eventNames.currentRunSummaryChanged, runtime)
-            emit(eventNames.currentRunDetailsChanged, runtime)
+            recording.onPlayResumed(runtime)
+            updateLiveRecordingRows(runtime, activeTimer(), getCurrentRun(), snapshot())
+            onChanged(runtime)
+        end,
+        onCheckpoint = function(runtime)
+            recording.checkpoint(runtime)
         end,
     })
 end

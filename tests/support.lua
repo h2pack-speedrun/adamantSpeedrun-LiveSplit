@@ -52,12 +52,58 @@ function support.newRuntimeState(backing)
             backing[alias] = nil
             return hadValue
         end,
+        -- Table storage: an in-memory stand-in for a Lib table handle (colon-call methods).
+        get = function(alias)
+            backing[alias] = backing[alias] or {}
+            local rows = backing[alias]
+            local function copy(row)
+                local result = {}
+                for key, value in pairs(row) do
+                    result[key] = value
+                end
+                return result
+            end
+            return {
+                count = function()
+                    return #rows
+                end,
+                append = function(_, row)
+                    rows[#rows + 1] = copy(row)
+                    return true
+                end,
+                insert = function(_, index, row)
+                    table.insert(rows, index, copy(row))
+                    return true
+                end,
+                remove = function(_, index)
+                    table.remove(rows, index)
+                    return true
+                end,
+                clear = function()
+                    for index = #rows, 1, -1 do
+                        rows[index] = nil
+                    end
+                    return true
+                end,
+                snapshots = function()
+                    local result = {}
+                    for index, row in ipairs(rows) do
+                        result[index] = copy(row)
+                    end
+                    return result
+                end,
+            }
+        end,
     }
 end
 
-function support.withImport(callback)
+-- Runs callback with a test `import`; `overrides` maps import paths to stand-in modules.
+function support.withImport(callback, overrides)
     local previousImport = _G.import
     _G.import = function(path, _, deps)
+        if overrides and overrides[path] ~= nil then
+            return overrides[path]
+        end
         return assert(loadfile("src/" .. path))(deps)
     end
     local ok, result = pcall(callback)
@@ -77,6 +123,64 @@ support.core = support.withImport(function()
     })
 end)
 
+support.keys = dofile("src/timer/keys.lua")
+support.routeOf = support.keys.routeOf
+support.resolveKeys = support.keys.resolve
+support.Session = assert(loadfile("src/timer/session.lua"))({
+    core = support.core,
+})
+support.newSession = support.Session.new
+support.store = dofile("src/timer/session_store.lua")
+support.categories = dofile("src/timer/categories.lua")
+
+--- Settings of the old multi-run batch (Custom with default rules) for `runs` runs.
+function support.batchSettings(runs)
+    return support.categories.settingsFor("custom", {
+        read = function(alias)
+            if alias == "BatchTargetRuns" then
+                return runs
+            end
+            return nil
+        end,
+    })
+end
+
+function support.batchDeps()
+    return {
+        newSession = support.newSession,
+        isRunSuccess = support.isRunSuccess,
+        keys = support.keys,
+        categoryNames = support.categories.NAMES,
+    }
+end
+
+--- Recording dependencies shared by tests; game reads default to "no save loaded".
+function support.recordingDeps(overrides)
+    local result = {
+        normalizeRecordingMode = support.data.normalizeRecordingMode,
+        newSession = support.newSession,
+        restoreSession = support.Session.restore,
+        resolveKeys = support.resolveKeys,
+        isRunSuccess = support.isRunSuccess,
+        currentRunOrdinal = function()
+            return nil
+        end,
+        findRunResult = function()
+            return nil
+        end,
+        store = support.store,
+        categories = support.categories,
+    }
+    for key, value in pairs(overrides or {}) do
+        result[key] = value
+    end
+    return result
+end
+
+function support.isRunSuccess(run)
+    return run ~= nil and run.Cleared == true
+end
+
 support.timeFormat = dofile("src/display/time_format.lua")
 
 support.formatCache = assert(loadfile("src/display/format_cache.lua"))({
@@ -92,5 +196,15 @@ support.overlay = support.withImport(function()
         fonts = support.fonts,
     })
 end)
+
+-- Recomputes split rows and returns biome row `index`, or nil when that row is empty.
+function support.splitRow(splits, index, timer, run, snapshot)
+    splits.updateRows(timer, run, snapshot)
+    local row = splits.details().biomes[index]
+    if row.label == "" then
+        return nil
+    end
+    return row
+end
 
 return support

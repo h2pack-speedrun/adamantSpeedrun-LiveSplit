@@ -1,4 +1,4 @@
-local deps = ... or {}
+local deps = ...
 local timer = deps.timer
 
 local settings = {}
@@ -8,18 +8,29 @@ local MODE_ALIASES = {
     lrt = "ShowLrT",
 }
 
+--- Timer only: the compact IGT/RTA/LrT rows instead of a table.
 function settings.isRawTimerRowsEnabled(runtime)
-    return runtime.data.read("ShowRawTimers") == true
-        and timer.recording.status().kind == "active"
+    return runtime.data.read("OverlayMode") == "timer"
 end
 
 function settings.isRecordingTableVisible(runtime)
-    return runtime.data.read("ShowRecordingTable") == true
+    return runtime.data.read("OverlayMode") ~= "timer"
+end
+
+--- The single-run splits table. Multi-run categories show the current run's splits inside the
+--- session table instead.
+function settings.isSplitsTableVisible(runtime)
+    return settings.isRecordingTableVisible(runtime)
+        and timer.recording.isMultiRunMode() ~= true
 end
 
 function settings.isBatchVisible(runtime)
     return settings.isRecordingTableVisible(runtime)
         and timer.recording.isMultiRunMode() == true
+end
+
+function settings.pageSize(runtime)
+    return runtime.data.read("PageSize")
 end
 
 function settings.isModeVisible(mode, runtime)

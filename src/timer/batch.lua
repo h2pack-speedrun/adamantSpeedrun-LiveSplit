@@ -1,78 +1,47 @@
-local deps = ... or {}
-local core = deps.core
+-- Multi-run recording: one category session projected into overlay rows, status and history.
+--
+-- The category settings (timer/categories.lua) decide the rules and how attempts are labeled.
+-- Categories that keep splits record each attempt's biome splits with session-cumulative times.
+
+local deps = ...
+local newSession = deps.newSession
 local isRunSuccess = deps.isRunSuccess
+local keys = deps.keys
+local categoryNames = deps.categoryNames
 
 local batch = {}
+
+local function newRow()
+    return { label = "", igtCs = nil, rtaCs = nil, lrtCs = nil }
+end
+
+local function newGroup()
+    return { heading = newRow(), biomes = {}, biomeCount = 0 }
+end
+
 local rows = {
     hasSession = false,
     active = false,
     failed = false,
+    -- True when attempts show their biome splits (the category keeps splits).
+    splits = false,
+    title = "",
     targetRuns = 0,
     completedRuns = 0,
-    runs = {},
-    current = { label = "", igtCs = nil, rtaCs = nil, lrtCs = nil },
+    -- Finished attempts are rows.groups[1..finishedCount]; failedCount of them died.
+    finishedCount = 0,
+    failedCount = 0,
+    groups = {},
+    current = newGroup(),
     currentTime = { igtCs = nil, rtaCs = nil, lrtCs = nil },
+    total = newRow(),
 }
 
 local state = {
     ready = false,
-    active = false,
-    failed = false,
-    targetRuns = 0,
-    completedRuns = 0,
-    completedIgt = 0,
-    runRows = {},
-    timer = nil,
-    currentRunActive = false,
+    settings = nil,
+    session = nil,
 }
-local BatchTimer = {}
-
-function BatchTimer:new()
-    local o = {}
-    o.Running = false
-    o.RtaTimer = core.RtaTimer:new()
-    o.LrtTimer = core.LrtTimer:new({ rtaTimer = o.RtaTimer })
-    setmetatable(o, self)
-    self.__index = self
-    return o
-end
-
-function BatchTimer:start()
-    self.Running = true
-    self.RtaTimer:start()
-    self.LrtTimer:start()
-end
-
-function BatchTimer:stop()
-    self.Running = false
-    self.RtaTimer:stop()
-    self.LrtTimer:stop()
-end
-
-function BatchTimer:update()
-    if not self.Running then
-        return
-    end
-    self.RtaTimer:update()
-end
-
-function BatchTimer:getRealTime()
-    return self.RtaTimer:getTime()
-end
-
-function BatchTimer:getLoadRemovedTime()
-    return self.LrtTimer:getTime()
-end
-
-function BatchTimer:processLoadEvent(isLoading)
-    if self.Running then
-        self.LrtTimer:processLoadEvent(isLoading)
-    end
-end
-
-local function normalizeTargetRuns(value)
-    return math.floor(tonumber(value) or 0)
-end
 
 local function setRow(row, label, igtCs, rtaCs, lrtCs)
     row.label = label or ""
@@ -82,16 +51,16 @@ local function setRow(row, label, igtCs, rtaCs, lrtCs)
     return row
 end
 
-local function getRunLabel(prefix, runIndex)
-    return ("%s %d/%d"):format(prefix, runIndex, state.targetRuns)
+local function targetRuns()
+    return state.settings and state.settings.runs or 0
 end
 
-local function getCurrentRunLabel()
-    local runIndex = state.completedRuns + 1
-    if state.targetRuns > 0 and runIndex > state.targetRuns then
-        runIndex = state.targetRuns
-    end
-    return getRunLabel("Current", runIndex)
+local function countedRuns()
+    return state.session and state.session:getCountedTotal() or 0
+end
+
+local function keepsSplits()
+    return state.settings ~= nil and state.settings.completedRun == "splits"
 end
 
 local function getActiveRunIgt(activeTimer)
@@ -101,97 +70,113 @@ local function getActiveRunIgt(activeTimer)
     return 0
 end
 
-local function getBatchRta()
-    return state.timer and state.timer:getRealTime() or 0
+local function keyName(attempt)
+    local labelKey = state.settings.label
+    return keys.nameOf(labelKey, attempt.keys[labelKey]) or "Unknown"
 end
 
-local function getBatchLrt()
-    return state.timer and state.timer:getLoadRemovedTime() or 0
-end
+local STATUS_SUFFIX = {
+    failed = " (died)",
+    duplicate = " (repeat)",
+    invalid = " (invalid)",
+}
 
-local function getActiveRunIgtCs(activeTimer)
-    return core.toCentiseconds(getActiveRunIgt(activeTimer))
-end
+local PAUSED_LABEL = "Paused"
 
-local function getBatchRtaCs()
-    return core.toCentiseconds(getBatchRta())
-end
-
-local function getBatchLrtCs()
-    return core.toCentiseconds(getBatchLrt())
-end
-
-local function stopTimer()
-    if state.timer and state.timer.Running then
-        state.timer:stop()
+local function finishedAttemptLabel(attempt)
+    if attempt.status == "paused" then
+        return PAUSED_LABEL
     end
-end
-
-local function resetCurrentBatch(clearTimer)
-    state.active = false
-    state.failed = false
-    state.completedRuns = 0
-    state.completedIgt = 0
-    state.runRows = {}
-    state.currentRunActive = false
-    if clearTimer ~= false then
-        stopTimer()
-        state.timer = nil
+    if state.settings.label == "index" then
+        if attempt.status == "counted" then
+            return ("Run %d/%d"):format(attempt.countIndex, targetRuns())
+        end
+        return attempt.status == "failed" and "Failed" or attempt.status == "duplicate" and "Duplicate"
+            or "Invalid"
     end
+    return keyName(attempt) .. (STATUS_SUFFIX[attempt.status] or "")
 end
 
-local function finishCurrentBatch()
-    state.active = false
-    state.currentRunActive = false
-    stopTimer()
+local function currentAttemptLabel(attempt)
+    if state.settings.label == "index" then
+        local runIndex = math.min(countedRuns() + 1, math.max(targetRuns(), 1))
+        return ("Current %d/%d"):format(runIndex, targetRuns())
+    end
+    return "Current: " .. keyName(attempt) .. (STATUS_SUFFIX[attempt.status] or "")
 end
 
-function batch.start(targetRuns)
+local function title()
+    local category = state.settings and state.settings.category
+    if category == nil or category == "custom" then
+        return "Runs"
+    end
+    return categoryNames[category] or "Runs"
+end
+
+function batch.start(settings)
     state.ready = true
-    state.targetRuns = normalizeTargetRuns(targetRuns)
-    resetCurrentBatch(true)
+    state.settings = settings
+    state.session = nil
 end
 
 function batch.stop()
     state.ready = false
-    resetCurrentBatch(true)
+    state.session = nil
 end
 
-function batch.clear(targetRuns)
-    if targetRuns ~= nil then
-        state.targetRuns = normalizeTargetRuns(targetRuns)
+--- Drops the session and keeps the readiness; `settings`, when given, replaces the rules.
+function batch.clear(settings)
+    if settings ~= nil then
+        state.settings = settings
     end
-    resetCurrentBatch(true)
+    state.session = nil
 end
 
-function batch.startRun()
+function batch.startRun(attemptKeys, runOrdinal)
     if not state.ready then
         return false
     end
-    if not state.active then
-        resetCurrentBatch(true)
-        state.active = true
+    if state.session == nil then
+        state.session = newSession(state.settings)
     end
-    if not state.timer then
-        state.timer = BatchTimer:new()
-        state.timer:start()
+    local attempt = state.session:startAttempt(attemptKeys or {}, runOrdinal)
+    if attempt ~= nil then
+        attempt.biomes = {}
     end
-    state.currentRunActive = true
-    return true
+    return attempt ~= nil
 end
 
-function batch.updateTimer()
-    if state.active and state.timer then
-        state.timer:update()
+--- Records biome splits the active attempt completed, with session-cumulative times. Returns
+--- true when a split was added (categories that keep splits only).
+function batch.captureBiomes(run)
+    local session = state.session
+    local attempt = session and session:getActiveAttempt()
+    if not keepsSplits() or attempt == nil or run == nil or run.BiomeVisitOrder == nil then
+        return false
     end
+    local seen = {}
+    for _, split in ipairs(attempt.biomes) do
+        seen[split.code] = true
+    end
+    local added = false
+    for _, code in ipairs(run.BiomeVisitOrder) do
+        local gameplayTime = run.BiomeGameplayTimes and run.BiomeGameplayTimes[code]
+        if gameplayTime ~= nil and not seen[code] then
+            attempt.biomes[#attempt.biomes + 1] = {
+                code = code,
+                igtCs = session:igtCs(gameplayTime),
+                rtaCs = session:rtaCs(),
+                lrtCs = session:lrtCs(),
+            }
+            seen[code] = true
+            added = true
+        end
+    end
+    return added
 end
 
 function batch.processLoadEvent(isLoading)
-    if state.active and state.timer then
-        state.timer:processLoadEvent(isLoading)
-        return true
-    end
-    return false
+    return state.session ~= nil and state.session:processLoadEvent(isLoading)
 end
 
 function batch.time(mode, activeTimer)
@@ -199,118 +184,168 @@ function batch.time(mode, activeTimer)
         return nil
     end
     if mode == "igt" then
-        local activeIgtCs = state.currentRunActive and getActiveRunIgtCs(activeTimer) or 0
-        return core.toCentiseconds(state.completedIgt) + activeIgtCs
+        return state.session:igtCs(getActiveRunIgt(activeTimer))
     end
     if mode == "rta" then
-        return getBatchRtaCs()
+        return state.session:rtaCs()
     end
     if mode == "lrt" then
-        return getBatchLrtCs()
+        return state.session:lrtCs()
     end
     return nil
 end
 
 function batch.finalizeRun(activeTimer, run)
-    if not state.active then
+    if not batch.isActive() then
         return false
     end
-
-    local runIgt = getActiveRunIgt(activeTimer)
-    if isRunSuccess(run) then
-        state.completedIgt = state.completedIgt + runIgt
-        state.completedRuns = state.completedRuns + 1
-        state.runRows[#state.runRows + 1] = {
-            label = getRunLabel("Run", state.completedRuns),
-            igtCs = core.toCentiseconds(state.completedIgt),
-            rtaCs = getBatchRtaCs(),
-            lrtCs = getBatchLrtCs(),
-        }
-        state.currentRunActive = false
-        if state.completedRuns >= state.targetRuns then
-            finishCurrentBatch()
-        end
-        return true
+    batch.captureBiomes(run)
+    local attempt = state.session:finishAttempt(isRunSuccess(run) == true, getActiveRunIgt(activeTimer))
+    if attempt == nil then
+        return false
     end
-
-    state.failed = true
-    state.currentRunActive = false
-    state.runRows[#state.runRows + 1] = {
-        label = "Failed",
-        igtCs = core.toCentiseconds(state.completedIgt + runIgt),
-        rtaCs = getBatchRtaCs(),
-        lrtCs = getBatchLrtCs(),
-    }
-    finishCurrentBatch()
+    if state.session:getOutcome() ~= nil then
+        state.ready = false
+    end
     return true
 end
 
-function batch.updateRows(activeTimer)
-    local rowCount = math.max(state.targetRuns, #state.runRows)
-    for index = 1, rowCount do
-        rows.runs[index] = rows.runs[index] or { label = "", igtCs = nil, rtaCs = nil, lrtCs = nil }
-        local source = state.runRows[index]
-        if source then
-            setRow(rows.runs[index], source.label, source.igtCs, source.rtaCs, source.lrtCs)
+local function setBiomeRows(group, attempt)
+    local count = 0
+    for _, split in ipairs(attempt.biomes or {}) do
+        count = count + 1
+        group.biomes[count] = group.biomes[count] or newRow()
+        setRow(group.biomes[count], keys.BIOME_NAMES[split.code] or split.code, split.igtCs, split.rtaCs, split.lrtCs)
+    end
+    group.biomeCount = count
+end
+
+-- The active attempt's route: captured splits, then the biome in progress with live times.
+local function setCurrentBiomeRows(group, attempt, run, activeTimer)
+    local captured = {}
+    for _, split in ipairs(attempt.biomes or {}) do
+        captured[split.code] = split
+    end
+    local currentBiome = run and run.CurrentRoom and run.CurrentRoom.RoomSetName
+    local count = 0
+    for _, code in ipairs(keys.ROUTES[attempt.keys.route] or {}) do
+        count = count + 1
+        group.biomes[count] = group.biomes[count] or newRow()
+        local split = captured[code]
+        local label = keys.BIOME_NAMES[code] or code
+        if split ~= nil then
+            setRow(group.biomes[count], label, split.igtCs, split.rtaCs, split.lrtCs)
+        elseif code == currentBiome then
+            setRow(group.biomes[count], label, batch.time("igt", activeTimer), batch.time("rta"), batch.time("lrt"))
         else
-            setRow(rows.runs[index], "", nil, nil, nil)
+            setRow(group.biomes[count], label, nil, nil, nil)
         end
     end
-    for index = rowCount + 1, #rows.runs do
-        setRow(rows.runs[index], "", nil, nil, nil)
+    group.biomeCount = count
+end
+
+function batch.updateRows(activeTimer, run)
+    local attempts = state.session and state.session:getAttempts() or {}
+    local finishedCount = 0
+    local failedCount = 0
+    local splits = keepsSplits()
+    for _, attempt in ipairs(attempts) do
+        if attempt.status == "failed" then
+            failedCount = failedCount + 1
+        end
+        if attempt.finished then
+            finishedCount = finishedCount + 1
+            local group = rows.groups[finishedCount] or newGroup()
+            rows.groups[finishedCount] = group
+            if attempt.status == "paused" then
+                -- A pause shows how long the session clocks were stopped; no in-game time passed.
+                local pausedCs = state.session:pausedCs(attempt)
+                setRow(group.heading, PAUSED_LABEL, nil, pausedCs, pausedCs)
+            else
+                setRow(group.heading, finishedAttemptLabel(attempt),
+                    attempt.sessionIgtCs, attempt.sessionRtaCs, attempt.sessionLrtCs)
+            end
+            if splits and attempt.status ~= "paused" then
+                setBiomeRows(group, attempt)
+            else
+                group.biomeCount = 0
+            end
+        end
+    end
+    for index = finishedCount + 1, #rows.groups do
+        setRow(rows.groups[index].heading, "", nil, nil, nil)
+        rows.groups[index].biomeCount = 0
     end
 
-    if state.active and state.currentRunActive then
-        setRow(rows.current, getCurrentRunLabel(), nil, nil, nil)
-        setRow(rows.currentTime, nil,
-            batch.time("igt", activeTimer),
-            batch.time("rta"),
-            batch.time("lrt"))
+    local active = batch.isActive() and state.session:getActiveAttempt() or nil
+    if active ~= nil then
+        setRow(rows.current.heading, currentAttemptLabel(active), nil, nil, nil)
+        if splits then
+            setCurrentBiomeRows(rows.current, active, run, activeTimer)
+        else
+            rows.current.biomeCount = 0
+        end
+        setRow(rows.currentTime, nil, batch.time("igt", activeTimer), batch.time("rta"), batch.time("lrt"))
     else
-        setRow(rows.current, "", nil, nil, nil)
+        setRow(rows.current.heading, "", nil, nil, nil)
+        rows.current.biomeCount = 0
         setRow(rows.currentTime, nil, nil, nil, nil)
     end
 
+    if batch.hasSession() then
+        setRow(rows.total, "Session", batch.time("igt", activeTimer), batch.time("rta"), batch.time("lrt"))
+    else
+        setRow(rows.total, "", nil, nil, nil)
+    end
+
+    rows.title = title()
+    rows.splits = splits
+    rows.finishedCount = finishedCount
+    rows.failedCount = failedCount
     rows.hasSession = batch.hasSession()
-    rows.active = state.active == true
-    rows.failed = state.failed == true
-    rows.targetRuns = state.targetRuns
-    rows.completedRuns = state.completedRuns
+    rows.active = batch.isActive()
+    rows.failed = state.session ~= nil and state.session:getOutcome() == "failed"
+    rows.targetRuns = targetRuns()
+    rows.completedRuns = countedRuns()
 end
 
 function batch.status()
-    if state.active then
-        return {
-            kind = "active",
-            text = ("Recording %d / %d"):format(state.completedRuns, state.targetRuns),
-        }
+    local session = state.session
+    local progress = ("%d / %d"):format(countedRuns(), targetRuns())
+    if session ~= nil and session:isPaused() then
+        return { kind = "paused", text = "Paused (" .. progress .. ")", canResume = true }
     end
-    if state.failed then
-        return {
-            kind = "failed",
-            text = ("Failed (%d / %d complete)"):format(state.completedRuns, state.targetRuns),
-        }
+    if batch.isActive() then
+        return { kind = "active", text = "Recording " .. progress, canPause = session:canPause() }
     end
-    if #state.runRows > 0 then
-        return {
-            kind = "recorded",
-            text = ("Recorded %d / %d"):format(state.completedRuns, state.targetRuns),
-        }
+    if session ~= nil and session:getOutcome() == "failed" then
+        return { kind = "failed", text = ("Failed (%s complete)"):format(progress) }
+    end
+    if session ~= nil and session:getLastFinishedAttempt() ~= nil then
+        return { kind = "recorded", text = "Recorded " .. progress }
     end
     if state.ready then
-        return {
-            kind = "ready",
-            text = ("Recording ready for %d runs"):format(state.targetRuns),
-        }
+        return { kind = "ready", text = ("Recording ready for %d runs"):format(targetRuns()) }
     end
-    return {
-        kind = "idle",
-        text = "Not recording",
-    }
+    return { kind = "idle", text = "Not recording" }
+end
+
+--- Pauses the session between attempts; returns the pause row, or nil when not allowed.
+function batch.pause()
+    return state.session ~= nil and state.session:pause() or nil
+end
+
+--- Ends a pause; returns the pause row, or nil when not paused.
+function batch.unpause()
+    return state.session ~= nil and state.session:unpause() or nil
+end
+
+function batch.isPaused()
+    return state.session ~= nil and state.session:isPaused()
 end
 
 function batch.isActive()
-    return state.active == true
+    return state.session ~= nil and state.session:isOpen()
 end
 
 function batch.isReady()
@@ -318,37 +353,92 @@ function batch.isReady()
 end
 
 function batch.targetRuns()
-    return state.targetRuns
+    return targetRuns()
+end
+
+function batch.getSettings()
+    return state.settings
 end
 
 function batch.hasSession()
-    return state.timer ~= nil or state.failed == true or state.completedRuns > 0
+    return state.session ~= nil and state.session:hasStarted()
 end
 
 function batch.hasProgress()
-    return state.active == true or state.failed == true or state.completedRuns > 0
+    return batch.hasSession()
 end
 
-function batch.row(index)
-    batch.updateRows()
-    return rows.runs[index]
+--- Finishes the restored session's active attempt with a result read from run history.
+function batch.finishRestoredAttempt(cleared, igtSeconds)
+    local attempt = state.session and state.session:finishAttempt(cleared, igtSeconds) or nil
+    if attempt ~= nil and state.session:getOutcome() ~= nil then
+        state.ready = false
+    end
+    return attempt
 end
 
-function batch.currentRow()
-    batch.updateRows()
-    return rows.current
+--- The current session, or nil before the first run.
+function batch.getSession()
+    return state.session
 end
 
-function batch.rows()
-    batch.updateRows()
+--- Adopts a restored session. An ended session keeps its result visible with recording disarmed.
+function batch.restore(session, settings)
+    state.settings = settings
+    state.session = session
+    state.ready = session:getOutcome() == nil
+end
+
+-- Finished-attempt history for the module UI, rebuilt only when it changes. A pause changes its
+-- row's duration without adding a row, so the paused state is part of the cache key.
+local history = {
+    session = nil,
+    finishedCount = -1,
+    paused = false,
+    entries = {},
+}
+
+--- Every finished attempt, oldest first: { label, status, igtCs, sessionIgtCs, sessionRtaCs,
+--- sessionLrtCs }. The returned list is replaced, not mutated, when attempts finish.
+function batch.history()
+    local session = state.session
+    local attempts = session and session:getAttempts() or {}
+    local finishedCount = 0
+    for _, attempt in ipairs(attempts) do
+        if attempt.finished then
+            finishedCount = finishedCount + 1
+        end
+    end
+    local paused = session ~= nil and session:isPaused()
+    if session == history.session and finishedCount == history.finishedCount and paused == history.paused then
+        return history.entries
+    end
+    local entries = {}
+    for _, attempt in ipairs(attempts) do
+        if attempt.finished then
+            entries[#entries + 1] = {
+                label = finishedAttemptLabel(attempt),
+                status = attempt.status,
+                igtCs = attempt.igtCs,
+                sessionIgtCs = attempt.sessionIgtCs,
+                sessionRtaCs = attempt.sessionRtaCs,
+                sessionLrtCs = attempt.sessionLrtCs,
+                pausedCs = attempt.status == "paused" and attempt.pausedCs or nil,
+                -- The pause in progress; its duration is final once it ends.
+                live = paused and attempt == attempts[#attempts] or nil,
+            }
+        end
+    end
+    history.session = session
+    history.finishedCount = finishedCount
+    history.paused = paused
+    history.entries = entries
+    return entries
+end
+
+function batch.session(activeTimer, run)
+    batch.updateRows(activeTimer, run)
     return rows
 end
-
-function batch.session(activeTimer)
-    batch.updateRows(activeTimer)
-    return rows
-end
-
-batch.BatchTimer = BatchTimer
 
 return batch

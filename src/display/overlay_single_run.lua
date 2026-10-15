@@ -1,4 +1,4 @@
-local deps = ... or {}
+local deps = ...
 local overlay = deps.overlay
 local isModeVisible = deps.isModeVisible
 local isTimerDisplayVisible = deps.isTimerDisplayVisible
@@ -67,10 +67,6 @@ function singleRunOverlay.project(ctx, runtime)
     for _, line in ipairs(LINES) do
         ctx.setLine(line.name, updateLine(line.mode, runtime))
     end
-end
-
-function singleRunOverlay.region()
-    return REGION
 end
 
 return singleRunOverlay

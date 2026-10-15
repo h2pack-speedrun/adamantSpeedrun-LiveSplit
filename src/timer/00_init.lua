@@ -1,29 +1,16 @@
-local deps = ... or {}
+local deps = ...
 
 local timer = {
     currentRun = {},
     batch = {},
     recording = {},
 }
-timer.events = import('timer/events.lua', nil, {
-    source = timer,
-})
+-- Called whenever timer or recording output may have changed.
+local onChanged = deps.onChanged
 
-local defaultGame = {
-    getTime = GetTime,
-    getCurrentRun = function()
-        return rom and rom.game and rom.game.CurrentRun or CurrentRun
-    end,
-    isRunSuccess = function(run)
-        if type(WasRunSuccess) == "function" and run and run.RunResult ~= nil then
-            return WasRunSuccess(run) == true
-        end
-        return run and run.Cleared == true
-    end,
-}
-local game = deps.game or defaultGame
+local game = import('timer/game.lua')
 
-local core = deps.core or import('timer/core/00_init.lua', nil, {
+local core = import('timer/core/00_init.lua', nil, {
     getTime = game.getTime,
     getCurrentRun = game.getCurrentRun,
 })
@@ -41,17 +28,36 @@ singleRun = import('timer/single_run/single_run.lua', nil, {
 })
 singleRun.installHooks = import('timer/single_run/hooks.lua', nil, singleRun).installHooks
 
+local keys = import('timer/keys.lua')
+local Session = import('timer/session.lua', nil, {
+    core = core,
+})
+local newSession = Session.new
+
 splits = import('timer/splits.lua', nil, {
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = game.isRunSuccess,
+    keys = keys,
 })
+local categories = import('timer/categories.lua')
 batch = import('timer/batch.lua', nil, {
-    core = core,
+    newSession = newSession,
     isRunSuccess = game.isRunSuccess,
+    keys = keys,
+    categoryNames = categories.NAMES,
 })
 recording = import('timer/recording.lua', nil, {
     splits = splits,
     batch = batch,
+    normalizeRecordingMode = import('data.lua').normalizeRecordingMode,
+    newSession = newSession,
+    restoreSession = Session.restore,
+    resolveKeys = keys.resolve,
+    isRunSuccess = game.isRunSuccess,
+    currentRunOrdinal = game.currentRunOrdinal,
+    findRunResult = game.findRunResult,
+    store = import('timer/session_store.lua'),
+    categories = categories,
 })
 runLoop = import('timer/run_loop.lua', nil, {
     singleRun = singleRun,
@@ -59,8 +65,7 @@ runLoop = import('timer/run_loop.lua', nil, {
     splits = splits,
     batch = batch,
     getCurrentRun = game.getCurrentRun,
-    emit = timer.events.emit,
-    events = timer.events.names,
+    onChanged = onChanged,
 })
 
 function timer.currentRun.summary()
@@ -88,7 +93,11 @@ function timer.currentRun.hasDetails()
 end
 
 function timer.batch.session()
-    return batch.session(singleRun.getActiveTimer())
+    return batch.session(singleRun.getActiveTimer(), game.getCurrentRun())
+end
+
+function timer.batch.history()
+    return batch.history()
 end
 
 function timer.batch.hasSession()
@@ -105,31 +114,37 @@ end
 
 function timer.recording.start(runtime)
     local result = recording.start(runtime)
-    timer.events.emitRecordingStarted(runtime, recording.isMultiRunMode())
+    onChanged(runtime)
     return result
 end
 
 function timer.recording.stop(runtime)
     local result = recording.stop(runtime)
-    timer.events.emitRecordingOutputsChanged(runtime)
+    onChanged(runtime)
+    return result
+end
+
+function timer.recording.togglePause(runtime)
+    local result = recording.togglePause(runtime)
+    onChanged(runtime)
     return result
 end
 
 function timer.recording.clear(runtime)
     local result = recording.clear(runtime)
-    timer.events.emitRecordingOutputsChanged(runtime)
+    onChanged(runtime)
     return result
 end
 
 function timer.recording.syncSettings(runtime)
     local result = recording.syncSettings(runtime)
-    timer.events.emitRecordingOutputsChanged(runtime)
+    onChanged(runtime)
     return result
 end
 
 function timer.initialize(runtime)
     recording.initialize(runtime)
-    timer.events.emitRecordingOutputsChanged(runtime)
+    onChanged(runtime)
 end
 
 function timer.installHooks(hooks)
@@ -145,14 +160,13 @@ function timer.ensureDisplayLoop()
 end
 
 function timer.updateTick(runtime)
-    local updated = runLoop.updateTick()
-    timer.events.emitTick(runtime, recording.isMultiRunMode())
-    return updated
+    runLoop.updateTick(runtime)
+    onChanged(runtime)
 end
 
 function timer.cleanup(runtime)
-    local result = runLoop.cleanup(runtime)
-    timer.events.emitCleanup(runtime)
+    local result = runLoop.cleanup()
+    onChanged(runtime)
     return result
 end
 

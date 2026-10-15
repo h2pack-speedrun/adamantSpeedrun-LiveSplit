@@ -36,7 +36,15 @@ local function init()
 
     module.data.define(data.buildStorage())
     module.status.define(data.buildStatus())
-    local timer = import("timer/00_init.lua")
+    local sharedSnapshot
+    local timer = import("timer/00_init.lua", nil, {
+        onChanged = function(runtime)
+            sharedSnapshot.publish(runtime.shared)
+        end,
+    })
+    sharedSnapshot = import("shared_snapshot.lua", nil, {
+        timer = timer,
+    })
     local controller = import("controller.lua", nil, {
         timer = timer,
     })
@@ -45,21 +53,32 @@ local function init()
         overlayEvents = controller.overlayEvents,
         fonts = module.overlays.fonts,
     })
-    local sharedSnapshot = import("shared_snapshot.lua", nil, {
-        timer = timer,
-    })
     local ui = import("ui.lua")
+    local pageHotkeys = import("display/page_hotkeys.lua", nil, {
+        paging = display.paging,
+        pageKeys = data.pageKeys,
+        isPagingActive = function()
+            return timer.recording.isMultiRunMode() and timer.batch.hasSession()
+        end,
+    })
+
+    local pauseHotkey = import("pause_hotkey.lua", nil, {
+        pauseKey = data.pauseKey,
+        togglePause = controller.togglePause,
+    })
 
     actions.attach(module, controller)
     sharedSnapshot.register(module.shared)
-    sharedSnapshot.attach(timer)
     timer.installHooks(module.hooks)
     display.registerOverlays(module.overlays)
     ui.attach(module, {
         getRecordingStatus = timer.recording.status,
+        getSessionHistory = timer.batch.history,
     })
     module.onCommit(controller.onCommit)
     module.onActivate(controller.onActivate)
+    pageHotkeys.attach(module)
+    pauseHotkey.attach(module)
 
     module.fallbackUi.attachGuiOnce(function(fallbackUi)
         rom.gui.add_imgui(fallbackUi.renderWindow)

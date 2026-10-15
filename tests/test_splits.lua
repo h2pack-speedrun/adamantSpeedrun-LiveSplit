@@ -22,6 +22,7 @@ local splitSnapshot = {
 }
 
 local timerSplits = assert(loadfile("src/timer/splits.lua"))({
+    keys = support.keys,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function(run)
         return run and run.Cleared == true
@@ -35,11 +36,11 @@ timerSplits.updateRows(splitTimer, {
     CurrentRoom = { RoomSetName = "F" },
     EnteredBiomes = 1,
 }, splitSnapshot)
-assertEqual(timerSplits.row(1, splitTimer, {
+assertEqual(support.splitRow(timerSplits, 1, splitTimer, {
     CurrentRoom = { RoomSetName = "F" },
     EnteredBiomes = 1,
 }, splitSnapshot).label, "Erebus")
-assertEqual(timerSplits.row(1, splitTimer, {
+assertEqual(support.splitRow(timerSplits, 1, splitTimer, {
     CurrentRoom = { RoomSetName = "F" },
     EnteredBiomes = 1,
 }, splitSnapshot).igtCs, 1234)
@@ -50,7 +51,7 @@ timerSplits.updateRows(splitTimer, {
     CurrentRoom = { RoomSetName = "N" },
     EnteredBiomes = 1,
 }, splitSnapshot)
-assertEqual(timerSplits.row(1, splitTimer, {
+assertEqual(support.splitRow(timerSplits, 1, splitTimer, {
     CurrentRoom = { RoomSetName = "N" },
     EnteredBiomes = 1,
 }, splitSnapshot).label, "Ephyra")
@@ -63,7 +64,7 @@ timerSplits.recordCompletedBiomes(splitTimer, {
         F = 65.43,
     },
 }, splitSnapshot)
-local completedSplitRow = timerSplits.row(1, splitTimer, {
+local completedSplitRow = support.splitRow(timerSplits, 1, splitTimer, {
     CurrentRoom = { RoomSetName = "G" },
     EnteredBiomes = 2,
 }, splitSnapshot)
@@ -76,12 +77,13 @@ timerSplits.finalizeRun(splitTimer, {
         F = 65.43,
     },
 }, splitSnapshot)
-assertEqual(timerSplits.status().kind, "recorded")
 assertEqual(timerSplits.hasDetails(), true)
 timerSplits.clear(false)
-assertEqual(timerSplits.status().kind, "idle")
+assertEqual(timerSplits.hasDetails(), false)
+assertEqual(timerSplits.isStarted(), false)
 
 local overlaySplits = assert(loadfile("src/timer/splits.lua"))({
+    keys = support.keys,
     toCentiseconds = core.toCentiseconds,
     isRunSuccess = function(run)
         return run and run.Cleared == true
@@ -139,3 +141,34 @@ splitsOverlayAdapter.project({
     end,
 }, nil, true)
 assertEqual(projectedSplitTables.splits[2].label, "Erebus")
+
+-- Rendering rows never starts a run; adoptRun explicitly picks up a run already underway.
+local adoptSplits = assert(loadfile("src/timer/splits.lua"))({
+    keys = support.keys,
+    toCentiseconds = core.toCentiseconds,
+    isRunSuccess = function()
+        return true
+    end,
+})
+adoptSplits.clear(true)
+local underwayRun = {
+    CurrentRoom = { RoomSetName = "G" },
+    EnteredBiomes = 2,
+}
+adoptSplits.updateRows(splitTimer, underwayRun, splitSnapshot)
+assertEqual(adoptSplits.hasDetails(), false)
+assertEqual(adoptSplits.adoptRun(underwayRun), true)
+assertEqual(adoptSplits.hasDetails(), true)
+assertEqual(adoptSplits.adoptRun(underwayRun), false)
+
+-- Disarming keeps the recorded result visible.
+adoptSplits.finalizeRun(splitTimer, underwayRun, splitSnapshot)
+adoptSplits.disarm()
+assertEqual(adoptSplits.isStarted(), false)
+assertEqual(adoptSplits.hasDetails(), true)
+
+local data = support.data
+assertEqual(data.normalizeRecordingMode("multi"), "multi")
+assertEqual(data.normalizeRecordingMode("single"), "single")
+assertEqual(data.normalizeRecordingMode("bogus"), "single")
+assertEqual(data.normalizeRecordingMode(nil), "single")

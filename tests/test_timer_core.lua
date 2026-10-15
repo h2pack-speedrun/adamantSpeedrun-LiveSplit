@@ -50,11 +50,8 @@ assertEqual(borrowedLrt:getTime(), 10)
 rtaTime = 15
 assertEqual(borrowedLrt:getTime(), 13)
 borrowedLrt:stop()
-borrowedLrt:reset()
 assertEqual(lrtBorrowedCalls.start, 0)
 assertEqual(lrtBorrowedCalls.stop, 0)
-assertEqual(lrtBorrowedCalls.reset, 0)
-assertEqual(borrowedLrt:getLoadTime(), 0)
 
 local singleRun = assert(loadfile("src/timer/single_run/single_run.lua"))({
     core = core,
@@ -88,6 +85,59 @@ assertEqual(singleRun.hasSummary(), false)
 setTime(0)
 _G.CurrentRun = nil
 
+-- RTA and LrT follow the system clock even when the time-scaled _worldTime runs slow or stalls.
+local function setClocks(systemTime, worldTime)
+    setTime(systemTime)
+    _worldTime = worldTime
+end
+local slowRun = assert(loadfile("src/timer/single_run/single_run.lua"))({
+    core = core,
+    isMultiRunMode = function()
+        return false
+    end,
+})
+setClocks(0, 0)
+slowRun.beginRun()
+slowRun.startDisplayLoop()
+for tick = 1, 40 do
+    setClocks(tick * 0.05, tick * 0.025)
+    slowRun.updateTick()
+    assertEqual(slowRun.getSnapshot().rtaCs, tick * 5)
+end
+slowRun.processLoadEvent(true)
+setClocks(5, 1)
+slowRun.processLoadEvent(false)
+slowRun.updateTick()
+assertEqual(slowRun.getSnapshot().rtaCs, 500)
+assertEqual(slowRun.getSnapshot().lrtCs, 200)
+local slowSplits = assert(loadfile("src/timer/splits.lua"))({
+    keys = support.keys,
+    toCentiseconds = core.toCentiseconds,
+    isRunSuccess = function()
+        return true
+    end,
+})
+slowSplits.clear(true)
+slowSplits.startRun({ CurrentRoom = { RoomSetName = "F" } })
+local slowSplitRun = {
+    CurrentRoom = { RoomSetName = "G" },
+    EnteredBiomes = 2,
+    BiomeVisitOrder = { "F" },
+    BiomeGameplayTimes = { F = 1.5 },
+}
+slowSplits.recordCompletedBiomes(slowRun.getActiveTimer(), slowSplitRun, slowRun.getSnapshot())
+local slowSplitRow = support.splitRow(slowSplits, 1, slowRun.getActiveTimer(), slowSplitRun, slowRun.getSnapshot())
+assertEqual(slowSplitRow.rtaCs, 500)
+assertEqual(slowSplitRow.lrtCs, 200)
+setClocks(6, 1)
+slowRun.finalizeRun()
+assertEqual(slowRun.getSnapshot().rtaCs, 600)
+setClocks(9, 1)
+slowRun.updateTick()
+assertEqual(slowRun.getSnapshot().rtaCs, 600)
+slowRun.clear()
+setClocks(0, 0)
+
 local hookSingleRun = assert(loadfile("src/timer/single_run/single_run.lua"))({
     core = core,
     isMultiRunMode = function()
@@ -115,10 +165,6 @@ hookAdapter.installHooks({
         hookEvents[#hookEvents + 1] = "started"
         hookEvents.startedRun = CurrentRun
         hookEvents.startedTimer = hookSingleRun.getActiveTimer()
-    end,
-    onDisplayLoopStarted = function()
-        hookEvents[#hookEvents + 1] = "display"
-        hookEvents.displayTimer = hookSingleRun.getActiveTimer()
     end,
     onLoadEvent = function(_, isLoading)
         hookEvents[#hookEvents + 1] = isLoading and "loadStart" or "loadStop"
@@ -151,7 +197,8 @@ assert(hookEvents.startedTimer ~= nil, "expected started timer")
 hookCallbacks.RoomEntranceMaterialize(hookHost, hookRuntime, function()
     return "entered"
 end)
-assertEqual(hookEvents[3], "display")
+assertEqual(hookEvents[3], "changed")
+assertEqual(hookSingleRun.getActiveTimer().Running, true)
 hookCallbacks.AddTimerBlock(hookHost, hookRuntime, function()
     return true
 end, CurrentRun, "MapLoad")

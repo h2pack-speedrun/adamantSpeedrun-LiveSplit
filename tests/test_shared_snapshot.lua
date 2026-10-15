@@ -9,7 +9,6 @@ local currentSummary = {
 local currentStatus = {
     kind = "idle",
 }
-local registeredEvents = {}
 
 local sharedSnapshot = assert(loadfile("src/shared_snapshot.lua"))({
     timer = {
@@ -21,15 +20,6 @@ local sharedSnapshot = assert(loadfile("src/shared_snapshot.lua"))({
         recording = {
             status = function()
                 return currentStatus
-            end,
-        },
-        events = {
-            names = {
-                currentRunSummaryChanged = "currentRunSummaryChanged",
-                recordingStatusChanged = "recordingStatusChanged",
-            },
-            on = function(eventName, callback)
-                registeredEvents[eventName] = callback
             end,
         },
     },
@@ -83,34 +73,41 @@ assertEqual(#sharedWrites, 1)
 assertEqual(sharedWrites[1].name, "TimerSnapshot")
 assertSnapshot(sharedWrites[1].value, 30, 24, 18, currentStatus)
 
-sharedSnapshot.attach({
-    events = {
-        names = {
-            currentRunSummaryChanged = "currentRunSummaryChanged",
-            recordingStatusChanged = "recordingStatusChanged",
-        },
-        on = function(eventName, callback)
-            registeredEvents[eventName] = callback
-        end,
-    },
-})
-
-assert(registeredEvents.currentRunSummaryChanged)
-assert(registeredEvents.recordingStatusChanged)
+-- Unchanged values and status skip the shared write.
+currentStatus = {
+    kind = "recording",
+}
+assert(sharedSnapshot.publish(shared))
+assertEqual(#sharedWrites, 1)
 
 currentSummary = {
     rtaCs = 44,
     lrtCs = 33,
     igtCs = 22,
 }
-currentStatus = {
-    kind = "stopped",
-}
-
-registeredEvents.currentRunSummaryChanged(nil, {
-    shared = shared,
-})
-
+assert(sharedSnapshot.publish(shared))
 assertEqual(#sharedWrites, 2)
-assertEqual(sharedWrites[2].name, "TimerSnapshot")
 assertSnapshot(sharedWrites[2].value, 44, 33, 22, currentStatus)
+
+currentStatus = {
+    kind = "recording",
+    text = "Recording 1 / 3",
+}
+assert(sharedSnapshot.publish(shared))
+assertEqual(#sharedWrites, 3)
+
+-- A failed write is retried on the next publish.
+local failingShared = {
+    set = function()
+        return false, "rejected"
+    end,
+}
+currentSummary = {
+    rtaCs = 50,
+    lrtCs = 40,
+    igtCs = 30,
+}
+assertEqual(sharedSnapshot.publish(failingShared), false)
+assert(sharedSnapshot.publish(shared))
+assertEqual(#sharedWrites, 4)
+assertSnapshot(sharedWrites[4].value, 50, 40, 30, currentStatus)
