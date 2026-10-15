@@ -2,6 +2,49 @@
 
 ## [Unreleased]
 
+## [5.3.0] - 2026-10-15
+
+### Added
+
+- keep timers visible while the game hides its combat HUD (7099b84)
+- Recording/Settings tabs, expressive Custom, merged session table and session pauses (
+f57d3d)
+- use Lib-managed hotkeys for overlay page keys (
+3ca694)
+- add All Regions, weapon and aspect categories with a category picker (
+b16433)
+- page the multi-run overlay and show session history (
+f81a65)
+- resume multi-run sessions after a game exit or crash (
+ac2b07)
+
+### Fixed
+
+- keep recording armed on disable and stop batches when they end (
+e5c4a1)
+- track RTA on the system clock instead of time-scaled world time (
+d89915)
+
+### Changed
+
+- let ModpackLib draw the page key pickers (
+985d65)
+- run single and multi recording on a category session engine (
+253fe4)
+- single recording-mode normalizer and explicit run adoption (
+3d2bc0)
+- remove test-only dependency defaults and dead timer code (
+1a7394)
+- replace the timer event bus with a single change callback (
+c83d2f)
+
+### Documentation
+
+- rewrite README for runners and update the categories design (
+baf403)
+- add category sessions design (
+e6db3d)
+
 ## [5.2.2] - 2026-10-10
 
 ### Fixed
